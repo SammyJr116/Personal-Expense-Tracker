@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 213 28% 94%;
+    --foreground: 222 39% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 39% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 39% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 24% 96%;
+    --secondary-foreground: 222 39% 20%;
+    --muted: 214 24% 95%;
+    --muted-foreground: 215 18% 47%;
+    --accent: 216 91% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 22% 86%;
+    --input: 213 22% 86%;
+    --ring: 221 83% 53%;
+    --income: 142 71% 40%;
+    --income-soft: 138 76% 95%;
+    --expense: 0 84% 60%;
+    --expense-soft: 0 86% 96%;
+    --chart-1: 221 83% 53%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 265 65% 62%;
+    --chart-5: 199 89% 48%;
+    --radius: 0.75rem;
+    --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+    /* Dark navy sidebar (reference: #1e3052) */
+    --sidebar-background: 219 46% 22%;
+    --sidebar-foreground: 210 30% 86%;
+    --sidebar-primary: 216 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 219 40% 30%;
+    --sidebar-accent-foreground: 210 30% 96%;
+    --sidebar-border: 219 36% 32%;
+    --sidebar-ring: 216 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1, h2, h3, .font-display {
+    @apply font-heading;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .card-soft {
+    @apply bg-card rounded-[var(--radius)] border border-border/70 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_10px_24px_-14px_rgba(16,24,40,0.12)];
+  }
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-[0_2px_6px_rgba(16,24,40,0.06),0_20px_40px_-16px_rgba(16,24,40,0.18)] hover:-translate-y-0.5;
+  }
+  .num-tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+}
