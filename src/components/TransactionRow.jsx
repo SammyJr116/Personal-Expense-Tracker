@@ -1,6 +1,7 @@
 import React from "react";
 import { formatMoney, relativeDate } from "@/lib/format";
 import { useApp } from "@/lib/store";
+import { STRINGS } from "@/lib/strings";
 import { cn } from "@/lib/utils";
 import { ArrowDownLeft, ArrowUpRight, Clock, Pencil, Trash2 } from "lucide-react";
 
@@ -25,10 +26,10 @@ export default function TransactionRow({ txn, onEdit, onDelete, compact }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{cat ? cat.name : "Uncategorised"}</span>
+          <span className="truncate text-sm font-medium">{cat ? cat.name : STRINGS.row.uncategorised}</span>
           {upcoming && (
             <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              <Clock className="h-3 w-3" /> Upcoming
+              <Clock className="h-3 w-3" /> {STRINGS.row.upcoming}
             </span>
           )}
         </div>
@@ -45,12 +46,12 @@ export default function TransactionRow({ txn, onEdit, onDelete, compact }) {
       {!compact && (onEdit || onDelete) && (
         <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
           {onEdit && (
-            <button onClick={() => onEdit(txn)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-background hover:text-foreground" aria-label="Edit">
+            <button onClick={() => onEdit(txn)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-background hover:text-foreground" aria-label={STRINGS.row.ariaEdit}>
               <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
           {onDelete && (
-            <button onClick={() => onDelete(txn)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-background hover:text-destructive" aria-label="Delete">
+            <button onClick={() => onDelete(txn)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-background hover:text-destructive" aria-label={STRINGS.row.ariaDelete}>
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}

@@ -1,11 +1,10 @@
 import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AppProvider, useApp } from '@/lib/store';
 import ScrollToTop from './components/ScrollToTop';
 import { PeriodProvider } from '@/lib/period';
+import { FiltersProvider } from '@/lib/filters';
 import Layout from '@/components/Layout';
 import SignIn from '@/pages/SignIn';
 import Dashboard from '@/pages/Dashboard';
@@ -29,25 +28,27 @@ const Gate = () => {
   if (!user) return <SignIn />;
   return (
     <PeriodProvider>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/add" element={<Add />} />
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/help" element={<Help />} />
-        </Route>
-        <Route path="*" element={<PageNotFound />} />
-      </Routes>
+      <FiltersProvider>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/add" element={<Add />} />
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/help" element={<Help />} />
+          </Route>
+          <Route path="*" element={<PageNotFound />} />
+        </Routes>
+      </FiltersProvider>
     </PeriodProvider>
   );
 };
 
 function App() {
   return (
-    <QueryClientProvider client={queryClientInstance}>
+    <>
       <Router>
         <ScrollToTop />
         <AppProvider>
@@ -55,7 +56,7 @@ function App() {
         </AppProvider>
       </Router>
       <Toaster />
-    </QueryClientProvider>
+    </>
   )
 }
 

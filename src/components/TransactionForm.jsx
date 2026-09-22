@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/store";
+import { STRINGS } from "@/lib/strings";
+import { validateTransaction } from "@/lib/transaction-validation";
 import { useToast } from "@/components/ui/use-toast";
 import { todayStr } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -16,7 +18,6 @@ import { ArrowDownLeft, ArrowUpRight, Check, Plus } from "lucide-react";
 // TXN-02: category choices depend on type.
 // TXN-06: Save + Save and add another.
 // TXN-08: no duplicate on double submit.
-const MAX_AMOUNT = 999999999.99;
 
 export default function TransactionForm({ open, onOpenChange, editing }) {
   const { categories, addTransaction, updateTransaction } = useApp();
@@ -58,19 +59,7 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
   }, [type]);  
 
   const validate = () => {
-    const e = {};
-    if (!type) e.type = "Choose a type.";
-    const amtStr = String(amount).trim();
-    if (!amtStr) e.amount = "Amount is required.";
-    else if (!/^\d+(\.\d{1,2})?$/.test(amtStr)) e.amount = "Enter a number with up to 2 decimals.";
-    else {
-      const n = parseFloat(amtStr);
-      if (!(n > 0)) e.amount = "Amount must be greater than zero.";
-      else if (n > MAX_AMOUNT) e.amount = "Amount is too large.";
-    }
-    if (!categoryId) e.category = "Choose a category.";
-    if (!date) e.date = "Date is required.";
-    if (note.length > 100) e.note = "Note must be 100 characters or fewer.";
+    const e = validateTransaction({ type, amount, categoryId, date, note });
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -90,7 +79,7 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
     try {
       if (editing) {
         updateTransaction(editing.id, buildPayload());
-        toast({ title: "Transaction updated", description: "Totals and charts refreshed." });
+        toast({ title: STRINGS.form.toastUpdated, description: STRINGS.form.toastUpdatedBody });
         onOpenChange(false);
       } else {
         addTransaction(buildPayload());
@@ -98,9 +87,9 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
           setAmount("");
           setCategoryId("");
           setNote("");
-          toast({ title: "Transaction saved", description: "Add another below." });
+          toast({ title: STRINGS.form.toastSavedAnother, description: STRINGS.form.toastSavedAnotherBody });
         } else {
-          toast({ title: "Transaction saved", description: "It now appears in your dashboard." });
+          toast({ title: STRINGS.form.toastSaved, description: STRINGS.form.toastSavedBody });
           onOpenChange(false);
         }
       }
@@ -113,7 +102,7 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit transaction" : "Add transaction"}</DialogTitle>
+          <DialogTitle>{editing ? STRINGS.form.titleEdit : STRINGS.form.titleAdd}</DialogTitle>
         </DialogHeader>
 
         {/* Type toggle — UXD-09 not color alone */}
@@ -126,7 +115,7 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
               type === "expense" ? "border-foreground bg-foreground text-background" : "border-border bg-card text-muted-foreground hover:text-foreground"
             )}
           >
-            <ArrowUpRight className="h-4 w-4" /> Expense
+            <ArrowUpRight className="h-4 w-4" /> {STRINGS.form.expense}
           </button>
           <button
             type="button"
@@ -136,17 +125,17 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
               type === "income" ? "border-foreground bg-foreground text-background" : "border-border bg-card text-muted-foreground hover:text-foreground"
             )}
           >
-            <ArrowDownLeft className="h-4 w-4" /> Income
+            <ArrowDownLeft className="h-4 w-4" /> {STRINGS.form.income}
           </button>
         </div>
         {errors.type && <p className="text-xs text-destructive">{errors.type}</p>}
 
         <div className="space-y-1.5">
-          <Label htmlFor="amount">Amount</Label>
+          <Label htmlFor="amount">{STRINGS.form.amountLabel}</Label>
           <Input
             id="amount"
             inputMode="decimal"
-            placeholder="0.00"
+            placeholder={STRINGS.form.amountPlaceholder}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className={cn("num-tabular", errors.amount && "border-destructive")}
@@ -155,7 +144,7 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="category">Category</Label>
+          <Label htmlFor="category">{STRINGS.form.categoryLabel}</Label>
           <div className="flex flex-wrap gap-2">
             {availableCats.map((c) => (
               <button
@@ -177,7 +166,7 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="date">Date</Label>
+          <Label htmlFor="date">{STRINGS.form.dateLabel}</Label>
           <Input
             id="date"
             type="date"
@@ -189,12 +178,12 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="note">Note <span className="text-muted-foreground">(optional)</span></Label>
+          <Label htmlFor="note">{STRINGS.form.noteLabel} <span className="text-muted-foreground">{STRINGS.form.noteOptional}</span></Label>
           <Textarea
             id="note"
             rows={2}
             maxLength={100}
-            placeholder="Add a short note"
+            placeholder={STRINGS.form.notePlaceholder}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className={errors.note && "border-destructive"}
@@ -205,11 +194,11 @@ export default function TransactionForm({ open, onOpenChange, editing }) {
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <div className="flex w-full gap-2">
             <Button onClick={() => handleSave(false)} disabled={saving} className="flex-1">
-              <Check className="h-4 w-4" /> {editing ? "Save changes" : "Save"}
+              <Check className="h-4 w-4" /> {editing ? STRINGS.form.saveChanges : STRINGS.form.save}
             </Button>
             {!editing && (
               <Button variant="outline" onClick={() => handleSave(true)} disabled={saving} className="flex-1">
-                <Plus className="h-4 w-4" /> Save & add another
+                <Plus className="h-4 w-4" /> {STRINGS.form.saveAndAnother}
               </Button>
             )}
           </div>

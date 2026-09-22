@@ -1,6 +1,7 @@
 import React from "react";
 import { usePeriod } from "@/lib/period";
 import { formatMonthLabel } from "@/lib/format";
+import { STRINGS } from "@/lib/strings";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -41,7 +42,7 @@ export default function PeriodPicker({ allowAll = false, allActive, onAll }) {
             period.type === "month" && !allActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          Month
+          {STRINGS.period.month}
         </button>
         <button
           onClick={() => { if (allActive && onAll) onAll(false); setType("year"); }}
@@ -50,17 +51,17 @@ export default function PeriodPicker({ allowAll = false, allActive, onAll }) {
             period.type === "year" && !allActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          Year
+          {STRINGS.period.year}
         </button>
       </div>
 
       {!allActive && (
         <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-card px-1 py-1 shadow-sm">
-          <button onClick={goPrev} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Previous period">
+          <button onClick={goPrev} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label={STRINGS.period.prev}>
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="min-w-[120px] text-center text-sm font-medium num-tabular">{label}</span>
-          <button onClick={goNext} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Next period">
+          <button onClick={goNext} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label={STRINGS.period.next}>
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
@@ -74,7 +75,7 @@ export default function PeriodPicker({ allowAll = false, allActive, onAll }) {
             allActive ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground"
           )}
         >
-          All time
+          {STRINGS.common.allTime}
         </button>
       )}
     </div>

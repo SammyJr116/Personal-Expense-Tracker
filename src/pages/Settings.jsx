@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "@/lib/store";
 import { CURRENCIES } from "@/lib/constants";
 import { useToast } from "@/components/ui/use-toast";
+import { STRINGS } from "@/lib/strings";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatMoney } from "@/lib/format";
 import {
@@ -11,7 +12,7 @@ import {
 } from "lucide-react";
 
 export default function Settings() {
-  const { user, settings, updateSettings, createBackup, restoreBackup, resetAllData, signOut, transactions, categories } = useApp();
+  const { user, settings, updateSettings, createBackup, restoreBackup, applyRestore, resetAllData, signOut, transactions, categories } = useApp();
   const { toast } = useToast();
   const navigate = useNavigate();
   const fileRef = useRef(null);
@@ -29,22 +30,22 @@ export default function Settings() {
     updateSettings({ currency: pendingCurrency });
     setCurrencyOpen(false);
     setPendingCurrency(null);
-    toast({ title: "Display currency updated", description: "Amounts were relabelled, not converted." });
+    toast({ title: STRINGS.settings.toastCurrency, description: STRINGS.settings.toastCurrencyBody });
   };
 
   const onBackup = () => {
     createBackup();
-    toast({ title: "Backup downloaded", description: "Your JSON file is not encrypted — store it safely." });
+    toast({ title: STRINGS.settings.toastBackup, description: STRINGS.settings.toastBackupBody });
   };
 
   const onPickFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setRestoreFile(file);
-    // preview by actually parsing
+    // BAK-04: parse and preview only — nothing is applied yet
     restoreBackup(file).then((res) => {
       if (res.error) {
-        toast({ title: "Restore failed", description: res.error, variant: "destructive" });
+        toast({ title: STRINGS.settings.toastRestoreFailed, description: res.error, variant: "destructive" });
         setRestoreFile(null);
       } else {
         setRestoreSummary(res);
@@ -53,12 +54,13 @@ export default function Settings() {
   };
 
   const confirmRestore = () => {
+    applyRestore(restoreSummary);
     toast({
-      title: "Restore complete",
-      description: `${restoreSummary.added} added, ${restoreSummary.skipped} skipped${restoreSummary.updated ? `, ${restoreSummary.updated} updated` : ""}.`,
+      title: STRINGS.settings.toastRestoreComplete,
+      description: STRINGS.settings.toastRestoreSummary(restoreSummary.added, restoreSummary.skipped, restoreSummary.updated),
     });
     if (restoreSummary.currency && restoreSummary.currency !== settings.currency) {
-      toast({ title: "Note", description: `Backup used ${restoreSummary.currency}. Your current currency was kept.`, });
+      toast({ title: STRINGS.settings.toastNote, description: STRINGS.settings.toastCurrencyKept(restoreSummary.currency), });
     }
     setRestoreSummary(null);
     setRestoreFile(null);
@@ -69,7 +71,7 @@ export default function Settings() {
     resetAllData();
     setResetOpen(false);
     setResetText("");
-    toast({ title: "All data reset", description: "Your transactions and custom categories were removed." });
+    toast({ title: STRINGS.settings.toastReset, description: STRINGS.settings.toastResetBody });
   };
 
   const signOutAndGo = () => {
@@ -79,15 +81,15 @@ export default function Settings() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">Settings</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Manage your preferences, data, and account.</p>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">{STRINGS.settings.title}</h1>
+      <p className="mt-1 text-sm text-muted-foreground">{STRINGS.settings.subtitle}</p>
 
       {/* Display currency — SET-02 */}
-      <Section icon={Coins} title="Display currency" description="A label only — amounts are never converted.">
+      <Section icon={Coins} title={STRINGS.settings.currencyTitle} description={STRINGS.settings.currencyBody}>
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">{settings.currency}</div>
-            <div className="text-xs text-muted-foreground">All amounts use two decimals.</div>
+            <div className="text-xs text-muted-foreground">{STRINGS.settings.twoDecimals}</div>
           </div>
           <select
             value={settings.currency}
@@ -101,34 +103,35 @@ export default function Settings() {
 
       {/* Categories — CAT-08 */}
       <Link to="/categories" className="block">
-        <Section icon={Tags} title="Categories" description="Add, rename, or delete custom expense categories." chevron />
+        <Section icon={Tags} title={STRINGS.settings.categoriesTitle} description={STRINGS.settings.categoriesBody} chevron />
       </Link>
 
       {/* Backup & restore — BAK */}
-      <Section icon={Download} title="Backup & restore" description="Back up to a JSON file or restore by merging.">
+      <Section icon={Download} title={STRINGS.settings.backupTitle} description={STRINGS.settings.backupBody}>
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Clock className="h-4 w-4" />
-            Last backup: <span className="font-medium text-foreground">{lastBackup ? new Date(lastBackup).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Never"}</span>
+            <span>{STRINGS.settings.lastBackupLead}</span>
+            <span className="font-medium text-foreground">{lastBackup ? new Date(lastBackup).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : STRINGS.settings.never}</span>
           </div>
         </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <button onClick={onBackup} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
-            <Download className="h-4 w-4" /> Back up my data
+            <Download className="h-4 w-4" /> {STRINGS.settings.backUp}
           </button>
           <button onClick={() => fileRef.current?.click()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium transition hover:border-foreground/30">
-            <Upload className="h-4 w-4" /> Restore from file
+            <Upload className="h-4 w-4" /> {STRINGS.settings.restore}
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onPickFile} />
         </div>
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-accent/10 px-3 py-2 text-xs text-muted-foreground">
           <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-          Backup files are plain, unencrypted JSON. Restore merges into your data and may bring back deleted transactions.
+          {STRINGS.settings.backupNote}
         </div>
       </Section>
 
       {/* Account — ACC-04 */}
-      <Section icon={LogOut} title="Account">
+      <Section icon={LogOut} title={STRINGS.settings.accountTitle}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
@@ -140,52 +143,52 @@ export default function Settings() {
             </div>
           </div>
           <button onClick={signOutAndGo} className="inline-flex items-center gap-2 rounded-xl border border-border px-3.5 py-2 text-sm font-medium transition hover:border-destructive hover:text-destructive">
-            <LogOut className="h-4 w-4" /> Sign out
+            <LogOut className="h-4 w-4" /> {STRINGS.common.signOut}
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">Signing out keeps your data on this device.</p>
+        <p className="mt-2 text-xs text-muted-foreground">{STRINGS.settings.signOutHint}</p>
       </Section>
 
       {/* Reset — SET-04 */}
-      <Section icon={Trash2} title="Reset all data" description="Permanently delete your transactions and custom categories.">
+      <Section icon={Trash2} title={STRINGS.settings.resetTitle} description={STRINGS.settings.resetBody}>
         <button onClick={() => setResetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-2.5 text-sm font-medium text-destructive transition hover:bg-destructive/10">
-          <Trash2 className="h-4 w-4" /> Reset all data
+          <Trash2 className="h-4 w-4" /> {STRINGS.settings.resetButton}
         </button>
       </Section>
 
       {/* Help link — NAV-02 */}
       <Link to="/help" className="block">
-        <Section icon={HelpCircle} title="Help & privacy" description="How your data is stored and how to back up." chevron />
+        <Section icon={HelpCircle} title={STRINGS.settings.helpTitle} description={STRINGS.settings.helpBody} chevron />
       </Link>
 
       {/* Currency change warning — SET-02 */}
       <ConfirmDialog
         open={currencyOpen}
         onOpenChange={setCurrencyOpen}
-        title="Change display currency?"
-        confirmLabel="Change label"
+        title={STRINGS.settings.currencyDialogTitle}
+        confirmLabel={STRINGS.settings.currencyDialogLabel}
         onConfirm={applyCurrency}
       >
-        <p>This only changes the currency label. Existing amounts are <b>not converted</b> — {formatMoney(transactions.reduce((a, t) => a + (t.type === "income" ? t.amount : -t.amount), 0), pendingCurrency || settings.currency)} would simply be shown in {pendingCurrency}.</p>
+        <span dangerouslySetInnerHTML={{ __html: STRINGS.settings.currencyDialogBody(formatMoney(transactions.reduce((a, t) => a + (t.type === "income" ? t.amount : -t.amount), 0), pendingCurrency || settings.currency), pendingCurrency) }} />
       </ConfirmDialog>
 
       {/* Restore summary — BAK-04 */}
       <ConfirmDialog
         open={!!restoreSummary}
         onOpenChange={(o) => { if (!o) { setRestoreSummary(null); setRestoreFile(null); } }}
-        title="Restore this backup?"
-        confirmLabel="Restore"
+        title={STRINGS.settings.restoreDialogTitle}
+        confirmLabel={STRINGS.settings.restoreDialogLabel}
         onConfirm={confirmRestore}
       >
         {restoreSummary && (
           <div>
-            <p>This will <b>merge</b> into your current data:</p>
+            <span dangerouslySetInnerHTML={{ __html: STRINGS.settings.restoreDialogLead }} />
             <ul className="mt-2 space-y-1">
-              <li>• {restoreSummary.added} transaction{restoreSummary.added !== 1 ? "s" : ""} added</li>
-              <li>• {restoreSummary.skipped} skipped (already exist)</li>
-              {restoreSummary.updated > 0 && <li>• {restoreSummary.updated} updated (newer version)</li>}
+              <li>• {STRINGS.settings.restoreAdded(restoreSummary.added)}</li>
+              <li>• {STRINGS.settings.restoreSkipped(restoreSummary.skipped)}</li>
+              {restoreSummary.updated > 0 && <li>• {STRINGS.settings.restoreUpdated(restoreSummary.updated)}</li>}
             </ul>
-            <p className="mt-2 text-xs">Transactions deleted since this backup will come back.</p>
+            <p className="mt-2 text-xs">{STRINGS.settings.restoreNote}</p>
           </div>
         )}
       </ConfirmDialog>
@@ -194,19 +197,19 @@ export default function Settings() {
       <ConfirmDialog
         open={resetOpen}
         onOpenChange={setResetOpen}
-        title="Reset all data?"
-        confirmLabel="Reset everything"
+        title={STRINGS.settings.resetDialogTitle}
+        confirmLabel={STRINGS.settings.resetDialogLabel}
         destructive
         onConfirm={confirmReset}
       >
         <div>
-          <p className="text-sm">This permanently deletes {transactions.length} transaction{transactions.length !== 1 ? "s" : ""} and {categories.filter((c) => !c.isPredefined).length} custom categor{categories.filter((c) => !c.isPredefined).length !== 1 ? "ies" : "y"}. This cannot be undone.</p>
-          <p className="mt-3 text-sm font-medium">Type <span className="font-mono">RESET</span> to confirm:</p>
+          <p className="text-sm">{STRINGS.settings.resetDialogBody(transactions.length, categories.filter((c) => !c.isPredefined).length)}</p>
+          <p className="mt-3 text-sm font-medium" dangerouslySetInnerHTML={{ __html: STRINGS.settings.resetTypePrompt }} />
           <input
             value={resetText}
             onChange={(e) => setResetText(e.target.value)}
             className="mt-1.5 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
-            placeholder="RESET"
+            placeholder={STRINGS.settings.resetPlaceholder}
           />
         </div>
       </ConfirmDialog>

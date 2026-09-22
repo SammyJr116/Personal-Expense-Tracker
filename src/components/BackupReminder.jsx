@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "@/lib/store";
+import { STRINGS } from "@/lib/strings";
 import { X, ShieldAlert } from "lucide-react";
 
 // BAK-09: gentle reminder when 30+ days since last backup (or never backed up with data).
@@ -35,14 +36,14 @@ export default function BackupReminder() {
       <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
       <div className="flex-1 text-sm">
         <span className="font-medium text-foreground">
-          {last ? "It's been a while since your last backup." : "You have data but no backup yet."}
+          {last ? STRINGS.backupReminder.overdue : STRINGS.backupReminder.never}
         </span>
-        <span className="text-muted-foreground"> Your data lives only on this device. </span>
+        <span className="text-muted-foreground">{STRINGS.backupReminder.livesHere}</span>
         <Link to="/settings" className="font-medium text-accent underline-offset-2 hover:underline">
-          Back up now
+          {STRINGS.backupReminder.backUpNow}
         </Link>
       </div>
-      <button onClick={dismiss} aria-label="Dismiss for 7 days" className="rounded-lg p-1.5 text-muted-foreground hover:bg-background">
+      <button onClick={dismiss} aria-label={STRINGS.backupReminder.dismiss} className="rounded-lg p-1.5 text-muted-foreground hover:bg-background">
         <X className="h-4 w-4" />
       </button>
     </div>

@@ -5,6 +5,10 @@ export const APP_TAGLINE = "Your money, privately on this device.";
 // ACC-03: allowed domain is a single configuration value
 export const COMPANY_DOMAIN = "northwind.co";
 
+// ACC-09 / OI-05: real Google sign-in is enabled only when a client ID is
+// provided via VITE_GOOGLE_CLIENT_ID (never commit a client ID to the repo).
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
 export const SCHEMA_VERSION = 1;
 
 // 7.3 Predefined categories — cannot be renamed or deleted (CAT-01)

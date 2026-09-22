@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { NAV_ITEMS, APP_NAME } from "@/lib/constants";
+import { STRINGS } from "@/lib/strings";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LogOut, HelpCircle, Plus } from "lucide-react";
@@ -48,7 +49,7 @@ export default function Sidebar({ onNavigate }) {
           </div>
           <div className="leading-tight">
             <div className="font-display text-xl font-semibold tracking-tight text-white">{APP_NAME}</div>
-            <div className="text-[11px] text-sidebar-foreground/60">Personal Expense Tracker</div>
+            <div className="text-[11px] text-sidebar-foreground/60">{STRINGS.sidebar.subtitle}</div>
           </div>
         </Link>
       </div>
@@ -66,7 +67,7 @@ export default function Sidebar({ onNavigate }) {
           )}
         >
           <HelpCircle className="h-[18px] w-[18px]" />
-          <span>Help</span>
+          <span>{STRINGS.sidebar.help}</span>
         </Link>
       </nav>
 
@@ -76,7 +77,7 @@ export default function Sidebar({ onNavigate }) {
           onClick={onNavigate}
           className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-sidebar-primary px-3.5 py-2.5 text-[15px] font-semibold text-sidebar-primary-foreground shadow-sm transition hover:brightness-110"
         >
-          <Plus className="h-4 w-4" /> New transaction
+          <Plus className="h-4 w-4" /> {STRINGS.sidebar.newTransaction}
         </Link>
 
         <div className="rounded-xl border border-sidebar-border/60 bg-sidebar-accent/50 p-3">
@@ -91,8 +92,8 @@ export default function Sidebar({ onNavigate }) {
             <button
               onClick={() => { signOut(); navigate("/"); }}
               className="rounded-lg p-2 text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-white"
-              title="Sign out"
-              aria-label="Sign out"
+              title={STRINGS.common.signOut}
+              aria-label={STRINGS.common.signOut}
             >
               <LogOut className="h-4 w-4" />
             </button>

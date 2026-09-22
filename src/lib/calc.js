@@ -27,10 +27,10 @@ export function inPeriod(txn, period) {
 }
 
 // Totals for a period — counted only
-export function periodTotals(transactions, period) {
+export function periodTotals(transactions, period, today = todayStr()) {
   let income = 0, expense = 0;
   for (const t of transactions) {
-    if (!isCounted(t)) continue;
+    if (!isCounted(t, today)) continue;
     if (!inPeriod(t, period)) continue;
     if (t.type === "income") income += t.amount;
     else expense += t.amount;
@@ -39,10 +39,10 @@ export function periodTotals(transactions, period) {
 }
 
 // Total balance across all dates — counted only (BR-01, DSH-02)
-export function totalBalance(transactions) {
+export function totalBalance(transactions, today = todayStr()) {
   let income = 0, expense = 0;
   for (const t of transactions) {
-    if (!isCounted(t)) continue;
+    if (!isCounted(t, today)) continue;
     if (t.type === "income") income += t.amount;
     else expense += t.amount;
   }
@@ -50,11 +50,11 @@ export function totalBalance(transactions) {
 }
 
 // Spending by category for a period (RPT-03 — expenses only, counted only)
-export function spendingByCategory(transactions, period, categories) {
+export function spendingByCategory(transactions, period, categories, today = todayStr()) {
   const map = new Map();
   for (const t of transactions) {
     if (t.type !== "expense") continue;
-    if (!isCounted(t)) continue;
+    if (!isCounted(t, today)) continue;
     if (!inPeriod(t, period)) continue;
     map.set(t.categoryId, (map.get(t.categoryId) || 0) + t.amount);
   }
@@ -74,7 +74,7 @@ export function spendingByCategory(transactions, period, categories) {
 }
 
 // Spending trend — by day in Month view, by month in Year view (RPT-05)
-export function spendingTrend(transactions, period) {
+export function spendingTrend(transactions, period, today = todayStr()) {
   const buckets = new Map();
   const add = (key, type, amount) => {
     if (!buckets.has(key)) buckets.set(key, { key, income: 0, expense: 0 });
@@ -83,7 +83,7 @@ export function spendingTrend(transactions, period) {
     else b.expense += amount;
   };
   for (const t of transactions) {
-    if (!isCounted(t)) continue;
+    if (!isCounted(t, today)) continue;
     if (!inPeriod(t, period)) continue;
     if (period.type === "year") {
       const m = Number(t.date.split("-")[1]);
@@ -126,9 +126,9 @@ export function spendingTrend(transactions, period) {
 }
 
 // Recent counted transactions for dashboard (DSH-05)
-export function recentTransactions(transactions, n = 5) {
+export function recentTransactions(transactions, n = 5, today = todayStr()) {
   return [...transactions]
-    .filter((t) => isCounted(t))
+    .filter((t) => isCounted(t, today))
     .sort((a, b) => (b.date < a.date ? -1 : b.date > a.date ? 1 : b.createdAt - a.createdAt))
     .slice(0, n);
 }

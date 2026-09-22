@@ -1,17 +1,22 @@
 import React, { useState } from "react";
 import { useApp } from "@/lib/store";
 import { APP_NAME, APP_TAGLINE, COMPANY_DOMAIN, DEMO_ACCOUNTS } from "@/lib/constants";
+import { STRINGS } from "@/lib/strings";
+import { isGoogleConfigured, promptGoogleSignIn } from "@/lib/google-signin";
 import { cn } from "@/lib/utils";
 import { ShieldCheck, Lock, ArrowRight, ChevronLeft } from "lucide-react";
 
 // ACC-01..ACC-03: sign-in screen, company Google Workspace domain only.
 // ACC-08: UI-level gate (no server enforcement). Simulated Google account picker.
+// ACC-09: with a VITE_GOOGLE_CLIENT_ID configured, real GIS sign-in is used;
+// without it the simulated picker remains and no GIS script loads.
 export default function SignIn() {
   const { signIn } = useApp();
   const [step, setStep] = useState("intro"); // intro | picker | another
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [connecting, setConnecting] = useState(false);
 
   const admit = (account) => {
     signIn(account);
@@ -22,10 +27,29 @@ export default function SignIn() {
     setError("");
     const domain = email.split("@")[1]?.toLowerCase();
     if (!domain || domain !== COMPANY_DOMAIN) {
-      setError(`Only @${COMPANY_DOMAIN} accounts are allowed. Sign in with your company account.`);
+      setError(STRINGS.signIn.domainError(COMPANY_DOMAIN));
       return;
     }
     admit({ name: name.trim() || email.split("@")[0], email });
+  };
+
+  // ACC-09: real Google flow when a client ID exists; otherwise simulate.
+  const goGoogle = async () => {
+    setError("");
+    if (!isGoogleConfigured()) {
+      setStep("picker");
+      return;
+    }
+    setConnecting(true);
+    const res = await promptGoogleSignIn();
+    setConnecting(false);
+    if (res?.error) return; // prompt suppressed/canceled — leave state unchanged
+    const domain = res.email.split("@")[1]?.toLowerCase();
+    if (!domain || domain !== COMPANY_DOMAIN) {
+      setError(STRINGS.signIn.domainError(COMPANY_DOMAIN));
+      return;
+    }
+    admit({ name: res.name || res.email.split("@")[0], email: res.email });
   };
 
   return (
@@ -41,18 +65,16 @@ export default function SignIn() {
           <span className="font-display text-2xl font-semibold">{APP_NAME}</span>
         </div>
         <div className="relative">
-          <h1 className="font-display text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">
-            Track your money,<br />privately on this device.
-          </h1>
+          <h1 className="font-display text-4xl font-semibold leading-tight tracking-tight xl:text-5xl" dangerouslySetInnerHTML={{ __html: STRINGS.signIn.editorialTitle }} />
           <p className="mt-4 max-w-md text-primary-foreground/70">
-            A clean, personal expense tracker for {COMPANY_DOMAIN} staff. Your income and expenses stay in your browser — no server, no company view.
+            {STRINGS.signIn.editorialBody.replaceAll("{DOMAIN}", COMPANY_DOMAIN)}
           </p>
           <div className="mt-8 flex flex-wrap gap-6 text-sm text-primary-foreground/70">
-            <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Private to you</div>
-            <div className="flex items-center gap-2"><Lock className="h-4 w-4" /> On-device only</div>
+            <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> {STRINGS.signIn.privateToYou}</div>
+            <div className="flex items-center gap-2"><Lock className="h-4 w-4" /> {STRINGS.signIn.onDeviceOnly}</div>
           </div>
         </div>
-        <div className="relative text-xs text-primary-foreground/50">Tally does not provide financial advice.</div>
+        <div className="relative text-xs text-primary-foreground/50">{STRINGS.signIn.footer}</div>
       </div>
 
       {/* Right — sign-in flow */}
@@ -66,19 +88,24 @@ export default function SignIn() {
                 </div>
                 <span className="font-display text-xl font-semibold">{APP_NAME}</span>
               </div>
-              <h2 className="font-display text-2xl font-semibold">Sign in to {APP_NAME}</h2>
+              <h2 className="font-display text-2xl font-semibold">{STRINGS.signIn.brandSubtitle.replaceAll("{APP_NAME}", APP_NAME)}</h2>
               <p className="mt-2 text-sm text-muted-foreground">{APP_TAGLINE}</p>
 
               <button
-                onClick={() => setStep("picker")}
-                className="mt-8 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium shadow-sm transition hover:shadow-md"
+                onClick={goGoogle}
+                disabled={connecting}
+                className="mt-8 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium shadow-sm transition hover:shadow-md disabled:opacity-60"
               >
                 <GoogleIcon />
-                Sign in with Google
+                {connecting ? STRINGS.signIn.signingIn : STRINGS.signIn.signInGoogle}
               </button>
 
+              {error && (
+                <div className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
+              )}
+
               <p className="mt-5 text-xs text-muted-foreground">
-                Only <span className="font-medium text-foreground">@{COMPANY_DOMAIN}</span> accounts are admitted.
+                {STRINGS.signIn.onlyDomain(COMPANY_DOMAIN)}
               </p>
             </div>
           )}
@@ -86,10 +113,10 @@ export default function SignIn() {
           {step === "picker" && (
             <div>
               <button onClick={() => setStep("intro")} className="mb-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                <ChevronLeft className="h-4 w-4" /> Back
+                <ChevronLeft className="h-4 w-4" /> {STRINGS.signIn.back}
               </button>
-              <h2 className="font-display text-xl font-semibold">Choose an account</h2>
-              <p className="mb-5 mt-1 text-sm text-muted-foreground">to continue to {APP_NAME}</p>
+              <h2 className="font-display text-xl font-semibold">{STRINGS.signIn.chooseAccount}</h2>
+              <p className="mb-5 mt-1 text-sm text-muted-foreground">{STRINGS.signIn.continueTo(APP_NAME)}</p>
               <div className="space-y-1.5">
                 {DEMO_ACCOUNTS.map((a) => (
                   <button
@@ -113,7 +140,7 @@ export default function SignIn() {
                 <div className="flex h-9 w-9 items-center justify-center rounded-full border border-dashed border-border">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M12 5v14M5 12h14"/></svg>
                 </div>
-                Use another account
+                {STRINGS.signIn.useAnother}
               </button>
             </div>
           )}
@@ -121,28 +148,28 @@ export default function SignIn() {
           {step === "another" && (
             <form onSubmit={submitAnother}>
               <button onClick={() => setStep("picker")} className="mb-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                <ChevronLeft className="h-4 w-4" /> Back
+                <ChevronLeft className="h-4 w-4" /> {STRINGS.signIn.back}
               </button>
-              <h2 className="font-display text-xl font-semibold">Sign in</h2>
-              <p className="mb-5 mt-1 text-sm text-muted-foreground">Use your @{COMPANY_DOMAIN} account.</p>
+              <h2 className="font-display text-xl font-semibold">{STRINGS.signIn.signInTitle}</h2>
+              <p className="mb-5 mt-1 text-sm text-muted-foreground">{STRINGS.signIn.useDomain(COMPANY_DOMAIN)}</p>
 
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Full name</label>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">{STRINGS.signIn.fullName}</label>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Jane Doe"
+                    placeholder={STRINGS.signIn.namePlaceholder}
                     className="w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Email</label>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">{STRINGS.signIn.email}</label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={`you@${COMPANY_DOMAIN}`}
+                    placeholder={STRINGS.signIn.emailPlaceholder(COMPANY_DOMAIN)}
                     className={cn("w-full rounded-xl border bg-card px-3.5 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-primary/15", error ? "border-destructive focus:border-destructive" : "border-border focus:border-primary")}
                   />
                 </div>
@@ -156,7 +183,7 @@ export default function SignIn() {
                 type="submit"
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
               >
-                Sign in <ArrowRight className="h-4 w-4" />
+                {STRINGS.signIn.signInButton} <ArrowRight className="h-4 w-4" />
               </button>
             </form>
           )}

@@ -21,8 +21,13 @@ export function getSession() {
 }
 
 export function setSession(user) {
-  if (user) localStorage.setItem(sessionKey(), JSON.stringify(user));
-  else localStorage.removeItem(sessionKey());
+  try {
+    if (user) localStorage.setItem(sessionKey(), JSON.stringify(user));
+    else localStorage.removeItem(sessionKey());
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function read(key, fallback) {
@@ -35,31 +40,62 @@ function read(key, fallback) {
   }
 }
 
+// FBK-03: writes report success/failure instead of throwing, so callers can
+// surface a clear message when storage is full or unavailable.
 function write(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
+// ARC-06 / NFR-02: report which keys were unreadable so callers can preserve
+// the raw stored data instead of silently overwriting it.
 export function loadUserData(userId) {
-  const txns = read(userKey(userId, "transactions"), []);
-  const cats = read(userKey(userId, "categories"), null);
-  const settings = read(userKey(userId, "settings"), null);
-  return { transactions: txns, categories: cats, settings };
+  const corruptKeys = [];
+  const readTracked = (key, fallback) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return fallback;
+      return JSON.parse(raw);
+    } catch {
+      corruptKeys.push(key);
+      return fallback;
+    }
+  };
+  const txns = readTracked(userKey(userId, "transactions"), []);
+  const cats = readTracked(userKey(userId, "categories"), null);
+  const settings = readTracked(userKey(userId, "settings"), null);
+  return { transactions: txns, categories: cats, settings, corruptKeys };
 }
 
 export function saveTransactions(userId, txns) {
-  write(userKey(userId, "transactions"), txns);
+  return write(userKey(userId, "transactions"), txns);
 }
 export function saveCategories(userId, cats) {
-  write(userKey(userId, "categories"), cats);
+  return write(userKey(userId, "categories"), cats);
 }
 export function saveSettings(userId, settings) {
-  write(userKey(userId, "settings"), settings);
+  return write(userKey(userId, "settings"), settings);
 }
 
 export function clearUserData(userId) {
   localStorage.removeItem(userKey(userId, "transactions"));
   localStorage.removeItem(userKey(userId, "categories"));
   localStorage.removeItem(userKey(userId, "settings"));
+}
+
+// ARC-07: best-effort request to persist site storage (reduces eviction risk).
+export async function requestPersistentStorage() {
+  try {
+    if (navigator.storage && typeof navigator.storage.persist === "function") {
+      await navigator.storage.persist();
+    }
+  } catch {
+    // best effort — unsupported or denied is fine
+  }
 }
 
 export { SCHEMA_VERSION };

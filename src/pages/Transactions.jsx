@@ -1,7 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { useApp } from "@/lib/store";
 import { usePeriod } from "@/lib/period";
+import { useToday } from "@/hooks/use-today";
+import { useFilters, PAGE } from "@/lib/filters";
 import { isUpcoming, inPeriod } from "@/lib/calc";
+import { STRINGS } from "@/lib/strings";
 import { formatMoney, formatDate } from "@/lib/format";
 import TransactionRow from "@/components/TransactionRow";
 import TransactionForm from "@/components/TransactionForm";
@@ -12,20 +15,22 @@ import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { Search, ArrowDownUp, Plus, Inbox } from "lucide-react";
 
-const PAGE = 50; // LST-04
-
 export default function Transactions() {
   const { transactions, categories, settings, deleteTransaction } = useApp();
   const { period } = usePeriod();
+  const today = useToday();
   const { toast } = useToast();
   const currency = settings.currency;
 
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [catFilter, setCatFilter] = useState("all");
-  const [allTime, setAllTime] = useState(false);
-  const [sort, setSort] = useState({ key: "date", dir: "desc" });
-  const [visible, setVisible] = useState(PAGE);
+  // LST-13: filters persist across in-app navigation via FiltersProvider
+  const {
+    search, setSearch,
+    typeFilter, setTypeFilter,
+    catFilter, setCatFilter,
+    allTime, setAllTime,
+    sort, setSort,
+    visible, setVisible,
+  } = useFilters();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [toDelete, setToDelete] = useState(null);
@@ -57,7 +62,7 @@ export default function Transactions() {
   }, [transactions, categories, period, allTime, typeFilter, catFilter, search, sort]);
 
   const shown = filtered.slice(0, visible);
-  const upcomingTotal = filtered.filter(isUpcoming).reduce((a, t) => a + t.amount, 0);
+  const upcomingTotal = filtered.filter((t) => isUpcoming(t, today)).reduce((a, t) => a + t.amount, 0);
   const hasActiveFilters = search || typeFilter !== "all" || catFilter !== "all" || !allTime;
 
   const clearFilters = () => {
@@ -66,7 +71,7 @@ export default function Transactions() {
 
   const confirmDelete = () => {
     deleteTransaction(toDelete.id);
-    toast({ title: "Transaction deleted" });
+    toast({ title: STRINGS.common.deleted });
     setToDelete(null);
   };
 
@@ -78,11 +83,11 @@ export default function Transactions() {
     <div>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Transactions</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{filtered.length} record{filtered.length !== 1 ? "s" : ""}{allTime ? " · All time" : ""}</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">{STRINGS.transactions.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{STRINGS.transactions.count(filtered.length, allTime)}</p>
         </div>
         <button onClick={() => { setEditing(null); setFormOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
-          <Plus className="h-4 w-4" /> Add
+          <Plus className="h-4 w-4" /> {STRINGS.common.add}
         </button>
       </div>
 
@@ -90,7 +95,7 @@ export default function Transactions() {
         <PeriodPicker allowAll allActive={allTime} onAll={(v) => setAllTime(v)} />
         {allTime && (
           <button onClick={() => setAllTime(false)} className="rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground">
-            Exit All time
+            {STRINGS.transactions.exitAllTime}
           </button>
         )}
       </div>
@@ -102,17 +107,17 @@ export default function Transactions() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search note or category…"
+            placeholder={STRINGS.transactions.searchPlaceholder}
             className="w-full rounded-xl border border-border bg-card py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
           />
         </div>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:border-primary">
-          <option value="all">All types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
+          <option value="all">{STRINGS.transactions.allTypes}</option>
+          <option value="income">{STRINGS.transactions.typeIncome}</option>
+          <option value="expense">{STRINGS.transactions.typeExpense}</option>
         </select>
         <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:border-primary">
-          <option value="all">All categories</option>
+          <option value="all">{STRINGS.transactions.allCategories}</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
@@ -139,9 +144,9 @@ export default function Transactions() {
         ) : (
           <EmptyState
             icon={hasActiveFilters ? Search : Inbox}
-            title={hasActiveFilters ? "No matching transactions" : "No transactions yet"}
-            description={hasActiveFilters ? "Try adjusting your search or filters." : "Add your first transaction to get started."}
-            actionLabel={hasActiveFilters ? "Clear filters" : "Add transaction"}
+            title={hasActiveFilters ? STRINGS.transactions.noMatchTitle : STRINGS.transactions.noTransactionsTitle}
+            description={hasActiveFilters ? STRINGS.transactions.noMatchBody : STRINGS.transactions.noTransactionsBody}
+            actionLabel={hasActiveFilters ? STRINGS.transactions.clearFilters : STRINGS.transactions.emptyAdd}
             onAction={hasActiveFilters ? clearFilters : () => { setEditing(null); setFormOpen(true); }}
           />
         )}
@@ -151,7 +156,7 @@ export default function Transactions() {
       {visible < filtered.length && (
         <div className="mt-5 text-center">
           <button onClick={() => setVisible((v) => v + PAGE)} className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-medium transition hover:border-foreground/30">
-            Load more ({filtered.length - visible} remaining)
+            {STRINGS.transactions.loadMore(filtered.length - visible)}
           </button>
         </div>
       )}
@@ -159,7 +164,7 @@ export default function Transactions() {
       {/* LST-06 upcoming total — never added to balance */}
       {upcomingTotal > 0 && (
         <div className="mt-5 rounded-xl bg-secondary/60 px-4 py-3 text-sm text-muted-foreground">
-          Upcoming in this view: <span className="num-tabular font-medium text-foreground">{formatMoney(upcomingTotal, currency)}</span> — not counted in your balance.
+          {STRINGS.transactions.upcomingTotal(formatMoney(upcomingTotal, currency))}
         </div>
       )}
 
@@ -167,9 +172,9 @@ export default function Transactions() {
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
-        title="Delete this transaction?"
+        title={STRINGS.transactions.deleteDialogTitle}
         destructive
-        confirmLabel="Delete"
+        confirmLabel={STRINGS.common.delete}
         onConfirm={confirmDelete}
       >
         {toDelete && (

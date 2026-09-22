@@ -3,9 +3,10 @@ import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import BackupReminder from "./BackupReminder";
 import { NAV_ITEMS, PAGE_TITLES } from "@/lib/constants";
+import { STRINGS } from "@/lib/strings";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { Menu } from "lucide-react";
+import { Menu, ShieldAlert } from "lucide-react";
 
 const MOBILE_ICONS = {
   LayoutDashboard: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>,
@@ -18,7 +19,7 @@ const MOBILE_ICONS = {
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { loaded } = useApp();
+  const { loaded, dataUnreadable } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -62,18 +63,28 @@ export default function Layout() {
           <button onClick={() => setMobileOpen(true)} aria-label="Open menu" className="rounded-lg p-2 hover:bg-secondary">
             <Menu className="h-5 w-5" />
           </button>
-          <div className="font-display text-lg font-semibold">Tally</div>
+          <div className="font-display text-lg font-semibold">{STRINGS.layout.brand}</div>
           <div className="w-9" />
         </header>
 
         <main className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
             <BackupReminder />
+            {dataUnreadable && (
+              <div className="mb-4 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <div className="font-medium">{STRINGS.layout.dataUnreadableTitle}</div>
+                  <p className="mt-0.5 text-muted-foreground">{STRINGS.layout.dataUnreadableBody}</p>
+                  <Link to="/settings" className="mt-1.5 inline-block font-medium underline underline-offset-2">{STRINGS.layout.dataUnreadableCta}</Link>
+                </div>
+              </div>
+            )}
             <Outlet />
           </div>
           {/* NAV-03 / SEC-08 footer disclaimer */}
           <footer className="border-t border-border/50 px-4 py-5 text-center text-xs text-muted-foreground sm:px-6 lg:px-10">
-            Tally does not provide financial advice. Your data stays on this device — back it up regularly.
+            {STRINGS.layout.footer}
           </footer>
           <div className="h-16 md:hidden" />
         </main>

@@ -4,6 +4,9 @@ import {
 } from "./constants";
 import { uid, todayStr } from "./format";
 import * as storage from "./storage";
+import { applyCategoryDelete } from "./category-delete";
+import { mergeTransactions, mergeCategories, remapCategoryIds } from "./restore-merge";
+import { toast } from "@/components/ui/use-toast";
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -34,11 +37,15 @@ export function AppProvider({ children }) {
   const [categories, setCategories] = useState([]);
   const [settings, setSettings] = useState(defaultSettings());
   const [loaded, setLoaded] = useState(false);
+  // ARC-06: kinds of user data whose stored value could not be parsed.
+  // While a kind is listed, saves to it are suppressed so the raw value survives.
+  const [corruptKinds, setCorruptKinds] = useState(() => new Set());
 
   // Load user data on sign-in (ACC-06 per-account separation)
   useEffect(() => {
     if (!user) {
       setTransactions([]); setCategories([]); setSettings(defaultSettings());
+      setCorruptKinds(new Set());
       setLoaded(true);
       return;
     }
@@ -46,19 +53,27 @@ export function AppProvider({ children }) {
     setTransactions(data.transactions || []);
     setCategories(data.categories || makeDefaultCategories());
     setSettings({ ...defaultSettings(), ...(data.settings || {}) });
+    setCorruptKinds(new Set((data.corruptKeys || []).map((k) => k.split(":").pop())));
     setLoaded(true);
+    storage.requestPersistentStorage(); // ARC-07: best effort, only once a user is present
   }, [user]);
 
-  // Persist on change
+  // Persist on change (FBK-03: surface save failures instead of losing data)
   useEffect(() => {
-    if (user && loaded) storage.saveTransactions(user.id, transactions);
-  }, [transactions, user, loaded]);
+    if (user && loaded && !corruptKinds.has("transactions") && !storage.saveTransactions(user.id, transactions)) {
+      toast({ title: "Change not saved", description: "Storage is full or unavailable — your latest transaction change may not be saved.", variant: "destructive" });
+    }
+  }, [transactions, user, loaded, corruptKinds]);
   useEffect(() => {
-    if (user && loaded) storage.saveCategories(user.id, categories);
-  }, [categories, user, loaded]);
+    if (user && loaded && !corruptKinds.has("categories") && !storage.saveCategories(user.id, categories)) {
+      toast({ title: "Change not saved", description: "Storage is full or unavailable — your latest category change may not be saved.", variant: "destructive" });
+    }
+  }, [categories, user, loaded, corruptKinds]);
   useEffect(() => {
-    if (user && loaded) storage.saveSettings(user.id, settings);
-  }, [settings, user, loaded]);
+    if (user && loaded && !corruptKinds.has("settings") && !storage.saveSettings(user.id, settings)) {
+      toast({ title: "Change not saved", description: "Storage is full or unavailable — your latest setting may not be saved.", variant: "destructive" });
+    }
+  }, [settings, user, loaded, corruptKinds]);
 
   // ARC-08: multi-tab sync via storage events
   useEffect(() => {
@@ -157,13 +172,10 @@ export function AppProvider({ children }) {
 
   // CAT-06: deleting a custom category moves its transactions to "Other"
   const deleteCategory = useCallback((id) => {
-    const other = categories.find((c) => c.type === "expense" && c.name === "Other" && c.isPredefined);
-    const otherId = other ? other.id : null;
-    setTransactions((prev) =>
-      prev.map((t) => (t.categoryId === id ? { ...t, categoryId: otherId, updatedAt: Date.now() } : t))
-    );
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-  }, [categories]);
+    const { transactions: nextTx, categories: nextCats } = applyCategoryDelete(categories, transactions, id);
+    setTransactions(nextTx);
+    setCategories(nextCats);
+  }, [categories, transactions]);
 
   // Settings
   const updateSettings = useCallback((patch) => {
@@ -175,6 +187,7 @@ export function AppProvider({ children }) {
     setTransactions([]);
     setCategories(makeDefaultCategories());
     setSettings(defaultSettings());
+    setCorruptKinds(new Set());
     storage.saveTransactions(user.id, []);
     storage.saveCategories(user.id, makeDefaultCategories());
     storage.saveSettings(user.id, defaultSettings());
@@ -200,59 +213,6 @@ export function AppProvider({ children }) {
     updateSettings({ lastBackupDate: new Date().toISOString() });
   }, [categories, transactions, settings, updateSettings]);
 
-  // Demo aid (not shipped persistent sample data — OOS-21): populate a few
-  // realistic transactions for the current month so the UI can be previewed.
-  const seedSampleData = useCallback(() => {
-    if (!user) return;
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1;
-    const mk = (day, type, catName, amount, note) => {
-      const cat = categories.find((c) => c.name === catName && c.type === type);
-      return {
-        id: uid(), type,
-        amount: Math.round(amount * 100),
-        categoryId: cat ? cat.id : null,
-        date: `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-        note,
-        createdAt: Date.now() - day * 1000,
-        updatedAt: Date.now() - day * 1000,
-      };
-    };
-    const future = (day, type, catName, amount, note) => {
-      const cat = categories.find((c) => c.name === catName && c.type === type);
-      return {
-        id: uid(), type,
-        amount: Math.round(amount * 100),
-        categoryId: cat ? cat.id : null,
-        date: `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-        note,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-    };
-    const today = now.getDate();
-    const txns = [
-      mk(Math.min(1, today), "income", "Salary", 4200, "Monthly salary"),
-      mk(Math.min(3, today), "expense", "Housing", 1450, "Rent"),
-      mk(Math.min(4, today), "expense", "Food", 86.4, "Weekly groceries"),
-      mk(Math.min(5, today), "expense", "Transport", 40, "Fuel"),
-      mk(Math.min(7, today), "expense", "Utilities", 120, "Electricity & water"),
-      mk(Math.min(8, today), "expense", "Entertainment", 32.99, "Cinema"),
-      mk(Math.min(10, today), "income", "Freelance", 600, "Side project"),
-      mk(Math.min(11, today), "expense", "Shopping", 74.5, "Clothes"),
-      mk(Math.min(12, today), "expense", "Health", 55, "Pharmacy"),
-      mk(Math.min(14, today), "expense", "Food", 23.8, "Lunch out"),
-      mk(Math.min(15, today), "expense", "Transport", 18, "Taxi"),
-      mk(Math.min(16, today), "expense", "Education", 200, "Online course"),
-    ].filter((t) => t.date <= `${y}-${String(m).padStart(2,"0")}-${String(today).padStart(2,"0")}`);
-    // a couple upcoming
-    const lastDay = new Date(y, m, 0).getDate();
-    if (lastDay > today) txns.push(future(Math.min(today + 3, lastDay), "expense", "Food", 60, "Planned groceries"));
-    if (lastDay > today + 5) txns.push(future(Math.min(today + 6, lastDay), "income", "Freelance", 350, "Expected payment"));
-    setTransactions(txns);
-  }, [user, categories]);
-
   const restoreBackup = useCallback(
     (file) =>
       new Promise((resolve) => {
@@ -264,39 +224,12 @@ export function AppProvider({ children }) {
               resolve({ error: "This file is not a valid Tally backup." });
               return;
             }
-            // BAK-03 merge
-            const existingTxns = [...transactions];
-            const byId = new Map(existingTxns.map((t) => [t.id, t]));
-            let added = 0, skipped = 0, updated = 0;
-            for (const t of data.transactions) {
-              const ex = byId.get(t.id);
-              if (!ex) { byId.set(t.id, t); added++; }
-              else if ((t.updatedAt || 0) > (ex.updatedAt || 0)) { byId.set(t.id, t); updated++; }
-              else skipped++;
-            }
-            // BAK-05 categories merge by name (case-insensitive)
-            const mergedCats = [...categories];
-            const nameIndex = new Map(
-              mergedCats.map((c) => [`${c.type}:${c.name.toLowerCase()}`, c.id])
-            );
-            const catIdMap = new Map();
-            for (const c of data.categories || []) {
-              const key = `${c.type}:${c.name.toLowerCase()}`;
-              if (nameIndex.has(key)) {
-                catIdMap.set(c.id, nameIndex.get(key));
-              } else {
-                const newId = uid();
-                mergedCats.push({ ...c, id: newId, isPredefined: false });
-                nameIndex.set(key, newId);
-                catIdMap.set(c.id, newId);
-              }
-            }
-            const finalTxns = [...byId.values()].map((t) =>
-              catIdMap.has(t.categoryId) ? { ...t, categoryId: catIdMap.get(t.categoryId) } : t
-            );
-            setTransactions(finalTxns);
-            setCategories(mergedCats);
-            resolve({ added, skipped, updated, currency: data.currency });
+            // BAK-03 / BAK-05: pure merge + category remap
+            const { transactions: finalTxns, added, skipped, updated } = mergeTransactions(transactions, data.transactions);
+            const { categories: mergedCats, catIdMap } = mergeCategories(categories, data.categories || []);
+            const pendingTransactions = remapCategoryIds(finalTxns, catIdMap);
+            // BAK-04: preview only — nothing is applied until applyRestore is called
+            resolve({ added, skipped, updated, currency: data.currency, pendingTransactions, pendingCategories: mergedCats });
           } catch {
             resolve({ error: "This file is corrupted or could not be read." });
           }
@@ -307,14 +240,21 @@ export function AppProvider({ children }) {
     [transactions, categories]
   );
 
+  // BAK-04: commits a staged restore computed by restoreBackup
+  const applyRestore = useCallback((pending) => {
+    setTransactions(pending.pendingTransactions);
+    setCategories(pending.pendingCategories);
+    setCorruptKinds(new Set());
+  }, []);
+
   const value = {
     user, signIn, signOut,
     transactions, categories, settings,
     addTransaction, updateTransaction, deleteTransaction,
     addCategory, renameCategory, deleteCategory,
     updateSettings, resetAllData,
-    createBackup, restoreBackup,
-    seedSampleData,
+    createBackup, restoreBackup, applyRestore,
+    dataUnreadable: corruptKinds.size > 0,
     loaded,
   };
 
