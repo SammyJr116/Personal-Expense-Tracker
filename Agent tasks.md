@@ -562,3 +562,424 @@ subtasks.
 8. **RP-14** (deploy last so it ships the refined build).
 9. **RP-15** (housekeeping; defer so it doesn't add noise while behavioral
    tasks are in flight).
+
+---
+
+# Phase: Closing the remaining frontend gaps
+
+Finishes the handful of UI-related items the PRD still lists as open. Each is
+small, self-contained, and verified against the running app at
+`http://localhost:5173`.
+
+---
+
+## FR-01 — Wire real Google sign-in behind a client ID, keeping simulated mode as the default
+
+- **PRD:** §6.4 (ACC-09, OI-05), §11.2 (ACC-09 real-GIS gate), §10. repeated
+  "Open Items" queue.
+- **Goal:** When `VITE_GOOGLE_CLIENT_ID` is set at build/run time, use real
+  Google Identity Services for sign-in; when it is unset, keep today's
+  simulated picker + `@northwind.co` domain gate exactly as-is.
+- **Context:** `src/lib/google-signin.js` already loads the GIS script and
+  wraps `initialize`/`prompt` when a client ID is present (`SignIn.jsx`
+  `goGoogle` routes through it, `constants.js` reads
+  `VITE_GOOGLE_CLIENT_ID`). This task only **verifies and finishes** that
+  path: confirm the real flow returns `{ name, email }`, applies the same
+  `@northwind.co` domain check used by the simulated path, and refuses
+  non-domain accounts with the existing "Only @northwind.co accounts are
+  allowed." message. No client ID will be committed (`.env` local only;
+  `VITE_GOOGLE_CLIENT_ID` already documented in `.env.example`).
+- **Files to touch:** `src/lib/google-signin.js`, `src/lib/constants.js` (only
+  if a default/fallback is missing), `src/pages/SignIn.jsx`, `.env.example`
+  (verify the variable is documented).
+- **Implement:**
+  1. Confirm GIS load is cached (single script tag, not re-injected on every
+     sign-in attempt).
+  2. Confirm the resolved account is normalized to `{ name, email }` and that
+     sign-in is admitted **only** when `email` ends with `@northwind.co`
+     (reuse the same lowercase endsWith check as the simulated path).
+  3. Keep simulated mode byte-for-byte when the ID is unset (no visual or
+     behavioral change in that path).
+- **DoD:** With an ID set in a local `.env`, a real Google account on the
+  domain is admitted; a non-domain account is refused with the existing
+  message; no creds appear in the repo. With no ID, the app is unchanged.
+- **Verify:** Set/clear the env var and run both flows at 5173; `npm run
+  lint`; `npm run build`.
+
+---
+
+## FR-02 — Make the currency selectable from a defined list with a stored default
+
+- **PRD:** §10.9 (SET-05), OI-09 (currency list is client input — pending).
+- **Goal:** Settings shows a currency picker fed by the same `CURRENCIES`
+  constant already exported from `src/lib/constants.js`; the chosen value is
+  persisted and used as the display label everywhere (no conversion — §10.9
+  and PRD keep currency label-only, OOS).
+- **Context:** `CURRENCIES` (a small array of `{ code, symbol, name }`) and
+  `COMPANY_DOMAIN` live in `src/lib/constants.js`. Settings already renders a
+  currency field but the *default* and the *list* are pending client sign-off
+  (OI-09). This task is therefore blocked on the client picking the default;
+  once chosen, wire the picker exactly to that list.
+- **Files to touch:** `src/pages/Settings.jsx` (currency section), `src/lib/settings.js`
+  (if the currency value is stored there), `src/lib/constants.js` (default).
+- **Implement:**
+  1. Render a select whose options come solely from `CURRENCIES`.
+  2. Default to the client-confirmed currency; persist selection.
+  3. Use the selected currency's symbol/label in Dashboard/Reports/Transactions
+     headers exactly as today's label-only usage does (no math changes).
+- **DoD:** Changing the currency in Settings updates the displayed label on
+  all three pages and survives reload. List matches PRD; lint/build pass.
+- **Verify:** Change currency → check Dashboard/Reports/Transactions → reload →
+  refresh persists; `npm run lint`; `npm run build`.
+
+---
+
+## FR-03 — Activate the backup cadence reminder banner per the confirmed schedule
+
+- **PRD:** §8.9 (BAK-06), §8.x (BAK-09 — reminder after 30 days without a
+  backup).
+- **Goal:** The dormant `BackupReminder` banner starts firing on the cadence
+  the client confirms (default 30 days), without changing the backup
+  mechanics themselves (BAK-01..05 unchanged).
+- **Context:** `src/components/BackupReminder.jsx` already exists and computes
+  eligibility from the last-backup date stored under `tally:<accountId>:…`
+  metadata; it is currently dormant pending client confirmation of the cadence
+  (BAK-09, OI-08). This task waits for that number, then wires it as the
+  constant the banner compares against.
+- **Files to touch:** `src/components/BackupReminder.jsx`, `src/lib/constants.js`
+  (the cadence constant), `src/components/Layout.jsx` (mount point — verify
+  the banner is already included).
+- **Implement:**
+  1. Replace the placeholder cadence with the client-confirmed constant.
+  2. Confirm the banner only appears on Dashboard/App-level layout, is
+     dismissible, and disappears after a backup is recorded.
+- **DoD:** Fishing out today's date → last backup older than the cadence shows
+  the banner; taking a backup (or tapping the banner's dismiss) removes it;
+  lint/build pass.
+- **Verify:** Set the cadence to a small value temporarily in DevTools to prove
+  the banner appears, then restore; `npm run lint`; `npm run build`.
+
+---
+
+## FR-04 — Run the final browser QA pass and record sign-off evidence
+
+- **PRD:** §11.1 (RP-11/12/13 — WCAG 2.1 AA, performance at 10k rows,
+  responsive at 360/768/1280). *Client-side manual sign-off items.*
+- **Goal:** Produce a recorded evidence file (screenshots + a checklist) that
+  the app meets the PRD's UI/accessibility/performance acceptance before the
+  deploy task runs.
+- **Context:** The reusable browser harness lives at
+  `C:\Users\Hp\AppData\Local\Temp\opencode\ui-review\review.js`
+  (puppeteer-core + headless Edge) and already produced 43/43 passing checks,
+  0 console/page errors, 0 failed requests, and no horizontal overflow at 360
+  px on all routes. This task re-runs it against **this** build and adds the
+  two manual items automated checks can't prove: WCAG 2.1 AA keyboard +
+  contrast walk-through (only realistic fixes allowed) and a 10,000-row
+  interaction timing sample.
+- **Files to touch:** the temp harness only (re-run it); no `src/` changes
+  unless a real, concrete WCAG failure is found — then fix only that.
+- **Implement:**
+  1. Re-run `review.js` against the dev server; record the summary line and
+     screenshot set into a `docs/qa-*` note (or commit message) as evidence.
+  2. Manual: full keyboard-only pass over each page (Tab order, visible focus,
+     Escape closes dialogs) and a DevTools contrast check on body text; fix
+     only concrete failures.
+  3. Manual: seed 10k transactions via a **temporary** DevTools snippet
+     (removed before commit, per OOS-21) and confirm search/filter/edit still
+     feel instant; note the measured interaction times.
+- **DoD:** Evidence (summary + screenshots) recorded; any WCAG/perf fix is
+  isolated and small; lint/build pass.
+- **Verify:** Re-run the harness `summary`; `npm run lint`; `npm run build`.
+
+---
+
+## FR-05 — Deploy the current build over HTTPS (choose host, document, ship)
+
+- **PRD:** §12.2 (DLV-01, DLV-02), OI-06/OI-11 (host/domain/URL — client
+  decision pending).
+- **Goal:** The built app is served from a live HTTPS URL and the README
+  documents the deploy steps and the URL.
+- **Context:** There is no host decision yet (OI-11). Once the client picks
+  one (GitHub Pages / Netlify / Vercel), configure the host: set the Vite
+  `base` to the deployed path if needed, add a `deploy`/`predeploy` script,
+  push the build, and record the URL in the README. Until then the task is
+  blocked on OI-11 — prepare only the README "Deployment" placeholders.
+- **Files to touch:** `vite.config.js` (base), `package.json` (scripts + a
+  host CI config), `README.md` (Deployment section).
+- **Implement:**
+  1. Add `predeploy` (`npm run build`) and `deploy` scripts for the chosen
+     host plus the host's publish config.
+  2. Set `base` to match the hosted path (or `./` relative if root).
+  3. Ship and verify trivially: load the URL, run the whole add/delete/settings
+     cycle, confirm persistence after reload, record the URL in the README.
+- **DoD:** Live HTTPS URL serves the app; end-to-end add/delete/persist works
+  there; README documents commands + URL; build passes.
+- **Verify:** Load the URL; repeat a Settings backup/restore cycle there;
+  `npm run build`.
+
+---
+
+# Phase: Backend functionality that supports the frontend (V2-forward design)
+
+V1 intentionally has **no backend** (PRD ARC-01..03, SEC-04, OOS-04): the app
+is a static SPA over `localStorage`, keyed per account. These tasks therefore
+**specify and scaffold** the backend the frontend is already shaped for
+(ARC-04), without adding any network layer to V1. Deliverable is design +
+isolated modules + tests, not a live server.
+
+---
+
+## BE-01 — Write the API contract document that the data model already maps to
+
+- **PRD:** ARC-04, ARC-13 (choose and document the stack), DAT-01..DAT-03.
+- **Goal:** A `docs/api-contract.md` describing the REST/JSON surface that a
+  future backend would expose, derived 1:1 from the existing data model.
+- **Context:** The frontend already stores relational-shaped records
+  (`transactions`, `categories` with `id`/`createdAt`/`updatedAt`; per-account
+  keys `tally:<accountId>:…`; session `tally:session`). The JSON shapes in
+  `src/lib/restore-merge.js` and the backup format are the natural endpoint
+  payloads.
+- **Files to touch:** `docs/api-contract.md` (new, docs only).
+- **Implement:**
+  1. List endpoints: `GET/PUT /api/user/:id/transactions`,
+     `…/categories`, `…/settings`, plus `POST /api/backup/export` and
+     `POST /api/backup/import` (mirroring the current backup two-phase
+     preview→apply).
+  2. Define each payload using the existing field names and shapes (from the
+     backup JSON: `format: "tally-backup"`, version, currency, categories,
+     transactions) so the UI merge rules apply unchanged.
+  3. Note auth (see BE-03) and the schema-versioning strategy (DAT-05).
+- **DoD:** The contract references the real field names/types in the codebase
+  (no invented shapes); each existing UI write maps to one endpoint; docs
+  only — lint/build unaffected.
+- **Verify:** Grep the doc's field names against `restore-merge.js` to confirm
+  they match; `npm run lint`.
+
+---
+
+## BE-02 — Extract the merge/restore rules into a backend-testable pure module
+
+- **PRD:** BAK-03 (merge by id, newer `updatedAt` wins), BAK-05 (category
+  merge by lower-cased `type:name`), CAT-06 (delete category moves txns to
+  "Other").
+- **Goal:** The restore-merge logic (currently inside `store.jsx` and already
+  partially in `restore-merge.js`) is fully pure and covered by tests, so a
+  server can implement the exact same rules.
+- **Context:** `src/lib/restore-merge.js` already holds pure merge functions
+  and there is a test file (`src/lib/__tests__/restore-merge.test.js`)
+  covering id-merge/updatedAt/category-name/case-insensitivity. Any parity
+  gaps (e.g. the `applyRestore` commit step in `store.jsx`) should be
+  extracted into the same module so UI and API share one implementation.
+- **Files to touch:** `src/lib/restore-merge.js` (extract any remaining inline
+  merge from `store.jsx`), `src/lib/store.jsx` (call the extracted function),
+  `src/lib/__tests__/restore-merge.test.js` (extend).
+- **Implement:**
+  1. Move any inline apply/merge logic from `store.jsx` into `restore-merge.js`
+     as pure functions (`importJson`, `applyRestore`, etc.).
+  2. Extend tests to cover the newly moved functions.
+- **DoD:** UI behavior is unchanged (same merge outcome); all logic that a
+  backend would reuse lives in the pure module; `npm test`, lint, build pass.
+- **Verify:** `npm test`; `npm run lint`; `npm run build`.
+
+---
+
+## BE-03 — Specify and (optionally stub) the auth service behind Google Workspace
+
+- **PRD:** ACC-09, ACC-10 (real Google Workspace via GIS), SEC-02/SEC-03
+  (OAuth), OI-05 (client ID pending).
+- **Goal:** A documented server-side auth design: verify the Google ID token
+  server-side (e.g. via the tokeninfo endpoint or the client library),
+  extract the claimed email, and enforce the `@northwind.co` domain gate on
+  the server (not just the UI).
+- **Context:** The frontend already gates by domain in `SignIn.jsx`
+  (`@northwind.co`) and reads a `VITE_GOOGLE_CLIENT_ID`. The backend would
+  re-verify the same token and claim. This task is **design + optional stub
+  only** (no live server in V1) and is blocked on OI-05 until a real client
+  ID exists.
+- **Files to touch:** `docs/api-contract.md` (§Auth — document token flow and
+  the 401/403 mapping), optionally `src/lib/google-signin.js` (no change
+  expected).
+- **Implement:**
+  1. Document: client sends `id_token`/credential; server verifies audience
+     (the installed client ID) and `hd`/email domain; non-domain → 403 with
+     the same message the UI shows.
+  2. Note the flow is behind a feature flag so V1 simulated mode is untouched.
+- **DoD:** The contract describes the exact 200/401/403 behavior and which
+  claims are required; UI change is zero; lint/build pass.
+- **Verify:** Read the Auth section with a reviewer; `npm run lint`.
+
+---
+
+## BE-04 — Persist data server-side (multi-device sync + backup) as an adapter
+
+- **PRD:** BAK-01..BAK-07 (backup/restore), ARC-04 (storage seam), OI-10
+  (multi-device sign-off pending).
+- **Goal:** A reference adapter that swaps `localStorage` for a server
+  endpoint, reusing the already-certified restore-merge rules for
+  reconciliation, without changing the UI.
+- **Context:** All persistence flows through `src/lib/storage.js` (the single
+  seam) into `src/lib/store.jsx`. `Arc-04` says such a swap must be possible
+  with no UI change. Because V1 ships localStorage-only (OOS-04), this task
+  produces the **adapter stub + tests** that prove the seam works, behind a
+  flag — no production server.
+- **Files to touch:** `src/lib/storage.js` (add an optional
+  `apiAdapter`/flag), `src/lib/restore-merge.js` (reuse for reconciliation),
+  `src/lib/__tests__/` (tests using a fake adapter), `.env.example`
+  (`VITE_BACKEND_URL` placeholder). No default behavior change.
+- **Implement:**
+  1. Introduce an interface `{ load(userId), save(userId, payload) }` with the
+     localStorage implementation as the default.
+  2. Add a test-only fake handling merge conflicts via `restore-merge` (newer
+     `updatedAt` wins) to prove the seam is backend-ready.
+- **DoD:** With the flag off, behavior is byte-identical to today; with the
+  flag on (tests only), reads/writes round-trip through the adapter and merge
+  rules; `npm test`, lint, build pass.
+- **Verify:** `npm test`; code review that no UI file changed;
+  `npm run lint`.
+
+---
+
+## BE-05 — Security hardening notes: keep data device-local and never leak backup content
+
+- **PRD:** SEC-04 (local-only storage), SEC-06 (frontend "does not send any
+  data"), ACC-09 (Google OAuth), OOS-20 (encryption not in V1).
+- **Goal:** A short, reviewed checklist confirming the frontend still sends
+  nothing anywhere unless a user opts in, plus explicitly documented
+  caveats for the backup file (unencrypted by design, contains real data —
+  OOS-20) and for any future backend.
+- **Context:** `src/lib/storage.js` + `store.jsx` are the only I/O paths and
+  both are localStorage-only today; there is no network layer in the bundle.
+- **Files to touch:** `docs/security-notes.md` (new, docs only).
+- **Implement:**
+  1. Document: V1 sends no data (can be verified by `grep fetch/axios` absent
+     in src); backups are plaintext JSON by design (OOS-20) — warn the user.
+  2. Note the future backend must do server-side token verification (BE-03)
+     and never trust the client's claimed email.
+- **DoD:** The notes are accurate against the current code (verify the
+  no-network claim with a grep); docs only; lint/build pass.
+- **Verify:** `grep -rn "fetch\|axios\|XMLHttpRequest" src` is empty;
+  `npm run lint`.
+
+---
+
+# Phase: Connecting the frontend to the backend
+
+Bridges the gap between the SPA's storage seam and the documented backend,
+still without shipping a server in V1. The output is a switchable storage
+adapter + integration behavior that flips on only when a backend flag is set.
+
+---
+
+## CONN-01 — Storage-layer adapter with backend flag (swap localStorage ↔ API)
+
+- **PRD:** ARC-04 (seam must allow swap), RP-14 (deploy), OI-06/11 (host).
+- **Goal:** `src/lib/storage.js` becomes an adapter factory: the default
+  remains localStorage; when `VITE_BACKEND_URL` is provided, it talks to the
+  API contract from BE-01. Both expose the identical
+  `{ load(userId), save(userId, payload) }` surface so `store.jsx` never
+  changes.
+- **Context:** Built on BE-04's stub interface. No UI change; this is the
+  mechanical swap the PRD requires.
+- **Files to touch:** `src/lib/storage.js`, `.env.example`, `src/lib/__tests__/`
+  (adapter selection tests), no page/component changes.
+- **Implement:**
+  1. Read `VITE_BACKEND_URL`; if set, construct the API-backed adapter (fetch
+     + JSON), else the existing localStorage adapter.
+  2. Keep the JSON shape identical (backup format), so `restore-merge` rules
+     apply on the client for offline/two-phase restore.
+- **DoD:** No flag → identical behavior; flag set (tests, or a local stub
+  server) → reads/writes hit the endpoint with the contract's paths and
+  bodies; `npm test`, lint, build pass.
+- **Verify:** Add a vitest case with a mocked `fetch`; `npm test`;
+  `npm run lint`.
+
+---
+
+## CONN-02 — Sync reconciliation on load (merge server + local by updatedAt)
+
+- **PRD:** BAK-03/BAK-05 rules, ARC-04, DAT-02 (updatedAt).
+- **Goal:** On sign-in/load with a backend flag, the client merges its
+  offline localStorage records with the server's using the exact
+  restore-merge rules (id-match, newer `updatedAt` wins, categories by
+  lower-cased `type:name`) instead of blindly overwriting.
+- **Context:** The pure merge rules are already in `restore-merge.js` (BE-02);
+  this wires them into the load path only when the backend adapter is active.
+- **Files to touch:** `src/lib/store.jsx` (load path, behind the adapter
+  flag), `src/lib/restore-merge.js` (reuse), `src/lib/__tests__/`.
+- **Implement:**
+  1. When the backend adapter is active, fetch server transactions/categories,
+     merge with local via `restore-merge`, and persist the merged result both
+     sides.
+  2. Keep the offline-only path byte-identical.
+- **DoD:** With the flag on and a stub server holding differing data, the app
+  shows the merged set per the rules; offline path unchanged; tests pass.
+- **Verify:** Unit test with crafted server vs local payloads; `npm test`;
+  `npm run lint`.
+
+---
+
+## CONN-03 — Backup/restore round-trip against the backend (two-phase, undo-safe)
+
+- **PRD:** BAK-02..BAK-04 (two-phase preview → apply), BAK-05 (merge),
+  SET-06 (clear data).
+- **Goal:** With the backend flag on, the two-phase "Restore" flow reads a
+  backup from the server (or uploaded file) and applies it exactly as today —
+  preview first, commit only on confirm — now merged server-side per
+  restore-merge rules.
+- **Context:** The Settings two-phase restore already exists for files (RP-02
+  verified). This adds a server-fetch variant behind the same flag, reusing
+  the identical confirm/cancel flow so no UI changes.
+- **Files to touch:** `src/lib/store.jsx` (restore path branch), `src/lib/restore-merge.js`
+  (reuse), `src/pages/Settings.jsx` (only if the backend variant needs a new
+  trigger — prefer reuse).
+- **Implement:**
+  1. Behind the flag, "Restore" can fetch the server backup, parse, stage,
+     and require the same confirmation before applying; cancel reverts nothing
+     (same as today's file flow).
+  2. Update the summary counts (added/skipped/updated) exactly as BAK-04.
+- **DoD:** Preview shows counts; confirm applies; cancel changes nothing; no
+  UI regression in the file path; tests pass.
+- **Verify:** Stub-server + vitest for the branch; manual file-path recheck at
+  5173; `npm test`; `npm run lint`.
+
+---
+
+## CONN-04 — Feature-flag guard: default is fully offline; enable switch documented
+
+- **PRD:** ARC-03 (no external dependency), DLV-06 (change requests), OI-06/11.
+- **Goal:** The backend behavior compiled above is **always off by default**;
+  a single documented flag (`VITE_BACKEND_URL`) turns it on, and the README +
+  `.env.example` explain the contract URL and what opting in means for the
+  data (now sent off-device, SEC-04 caveat).
+- **Context:** Every CONN/BE task is additive and flag-guarded; this task
+  confirms the guard is airtight at runtime and that the docs tell the user
+  exactly what turning the flag on does to their data.
+- **Files to touch:** `src/lib/constants.js`/`storage.js` (flag read),
+  `README.md` (Backend section), `.env.example`.
+- **Implement:**
+  1. Grep for `VITE_BACKEND_URL`; confirm every branch is replaced by the
+     flag and the default localStorage path has zero new dependencies.
+  2. Document the security note (SEC-04: enabling sends data off-device) and
+     the expectation that V1 ships offline-only.
+- **DoD:** Default build has no fetch/axios in `src` (grep empty); turning the
+  flag on in a local .env enables the adapters and they pass the CONN tests;
+  README updated; lint/build pass.
+- **Verify:** `grep -rn "fetch\|axios" src` empty on default; flip the flag in
+  a local .env and run the CONN vitest stubs; `npm run lint`; `npm run build`.
+
+---
+
+# Suggested order
+
+1. **FR-01 → FR-02 → FR-03** (frontend gaps; quick and independent; run after
+   RP-15 housekeeping so the tree is clean).
+2. **FR-04** (QA evidence; run before FR-05 so deploy ships the verified
+   build).
+3. **FR-05** (deploy; last, after QA evidence exists — blocked on OI-11 host
+   decision).
+4. **BE-01 → BE-05** (docs/design; low risk any time).
+5. **BE-02** (pure-module extraction; the enabling refactor for CONN-02/03).
+6. **BE-03** (auth design; blocked on OI-05 client ID for any real testing).
+7. **BE-04 → CONN-01 → CONN-02 → CONN-03** (adapter + load-merge + restore;
+   build incrementally, each on the previous; all gated by the flag).
+8. **CONN-04** (guard + docs; run last to confirm the flag is airtight).
