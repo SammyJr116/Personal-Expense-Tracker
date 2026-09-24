@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| **Document** | PRD v1.0 |
-| **Status** | Draft for client sign-off |
-| **Date** | 21 September 2026 |
+| **Document** | PRD v1.1 |
+| **Status** | Draft for client sign-off — **architecture change pending confirmation** (Section 16, OI-13) |
+| **Date** | 23 September 2026 |
 | **Product** | Personal Expense Tracker — internal web app for company staff |
-| **Basis** | Client SRS v1.0 and the requirements discussion (decisions D-01 to D-23, baseline defaults DF-01 to DF-27, see Section 18) |
+| **Basis** | Client SRS v1.0 and the requirements discussion (decisions D-01 to D-24, baseline defaults DF-01 to DF-27, see Section 18) |
 
 ---
 
@@ -177,9 +177,9 @@ These are explicitly excluded. Adding any of them requires a change request (DLV
 
 ## 5. Architecture and Technical Constraints
 
-- **ARC-01** The app MUST be a static front-end web application. It MUST NOT include a server, database, or API for transactions. `[A]` D-03, D-05
-- **ARC-02** The Developer hosts the app on their own account or a static hosting service and serves it over HTTPS. Domain, URL, and hosting-account ownership terms are confirmed in OI-11 and OI-06. `[A]` D-05
-- **ARC-03** All financial data MUST be stored in the browser on the user's device and MUST NOT be transmitted to any server. `[A]` D-03
+- **ARC-01** The app MUST be a static front-end web application for the UI, backed by a company-owned server + database (Section 5.5). The server replaces the V1 localStorage baseline (ARC-03-as-was). `[A]` D-03, D-05; superseded rows kept in Section 3.1.
+- **ARC-02** The Developer hosts the app over HTTPS. Domain, URL, and hosting-account ownership terms are confirmed in OI-11 and OI-06. `[A]` D-05
+- **ARC-03** All financial data MUST be stored server-side per user account, separated per Google account (ACC-06), and transmitted over HTTPS. The local/browser copy is a cache, not the system of record. `[A]` D-03
 - **ARC-04** All reading and writing of stored data MUST go through a storage layer, so a backend can replace it later without changing the UI. Stored records use unique IDs and timestamps (DAT-01). `[D]` DF-13
 - **ARC-05** Storage MUST support at least 10,000 transactions per user with the performance in NFR-01. The storage mechanism is the Developer's choice and MUST be recorded in the README. `[D]` DF-04
 - **ARC-06** Stored data MUST carry a schema version number and be upgraded by migrations. If stored data cannot be read, the app MUST NOT erase it. It shows an error and offers restore from a backup. `[D]` DF-15
@@ -513,13 +513,19 @@ Mapping of work to milestones is `[D]`. Dates are to be set (DLV-04).
 - **SEC-01** The app never requests or stores bank credentials or payment-card information (BR-11).
 - **SEC-02** Notes and all user text are rendered as plain text, never as HTML or script. `[D]` DF-24
 - **SEC-03** Only the Google display name, email, and account ID are used (ACC-07).
-- **SEC-04** Transaction data never leaves the user's device and is never stored on a server. The company has no access to it (ARC-03).
+- **SEC-04** Transaction data IS transmitted to, and stored on, the company's own server and database, keyed by account, and served over HTTPS. It is never shared with third parties. The company has access to it as the system-of-record (ARC-03, ARC-04).
+
 - **SEC-05** No analytics, tracking, or usage monitoring is collected. `[C]` OI-01
+
 - **SEC-06** The app is served over HTTPS (ARC-02).
-- **SEC-07** The Help page privacy statement ("your data stays on this device") is published only once SEC-05 is confirmed. `[C]`
+
+- **SEC-07** The Help page privacy statement MUST describe the new model: data is stored on the company's server and in the browser cache; it is never shared with third parties. Published once SEC-05 is confirmed. `[C]`
+
 - **SEC-08** The footer states that the app gives no financial advice (NAV-03).
+
 - **SEC-09** Backup files are plain, unencrypted JSON. The user is warned when creating one (BAK-10). Encryption is out of scope for V1. `[C]` OI-08
-- **SEC-10** Data in browser storage is not encrypted by the app. It is protected only by the device, the browser, and the sign-in gate. Access enforcement limits are stated in ACC-08.
+
+- **SEC-10** Data in browser storage (the local cache) is not encrypted by the app. Server-side storage uses transport HTTPS and at-rest protection per Section 14.1. The access gate (ACC-08) and server-side enforcement (SEC-04) limit exposure.
 
 ---
 

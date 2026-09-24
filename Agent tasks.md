@@ -721,6 +721,15 @@ small, self-contained, and verified against the running app at
 
 # Phase: Backend functionality that supports the frontend (V2-forward design)
 
+> **SUPERSEDED — do NOT implement this phase.** The client authorised a scope
+> change (2026-09-23) that reverses the "no server / no database /
+> localStorage-only" baseline: V1 now ships a **real backend + database**
+> (client->server). BE-01..BE-05 and CONN-01..CONN-04 below describe the old
+> "planning-only" adapter design and now **conflict** with the authorised
+> **BDB phase** (see further down the file). Work **BDB-01..BDB-10** instead.
+> This phase is retained only for traceability (per BDB-01's PRD rule that old
+> rows move to "Superseded" rather than being deleted).
+
 V1 intentionally has **no backend** (PRD ARC-01..03, SEC-04, OOS-04): the app
 is a static SPA over `localStorage`, keyed per account. These tasks therefore
 **specify and scaffold** the backend the frontend is already shaped for
@@ -969,7 +978,11 @@ adapter + integration behavior that flips on only when a backend flag is set.
 
 ---
 
-# Suggested order
+# Suggested order — partially SUPERSEDED. Items 1–3 (**FR-01..FR-05**) remain
+# valid frontend-gap tasks; items 4–8 (**BE-01..BE-05, CONN-01..CONN-04**) are
+# superseded by the BDB phase (see banner at the top of the Backend phase).
+# For the authorised sequencing, follow the "Suggested order — BDB" section
+# further down.
 
 1. **FR-01 → FR-02 → FR-03** (frontend gaps; quick and independent; run after
    RP-15 housekeeping so the tree is clean).
@@ -983,3 +996,297 @@ adapter + integration behavior that flips on only when a backend flag is set.
 7. **BE-04 → CONN-01 → CONN-02 → CONN-03** (adapter + load-merge + restore;
    build incrementally, each on the previous; all gated by the flag).
 8. **CONN-04** (guard + docs; run last to confirm the flag is airtight).
+
+---
+
+# Phase: Backend and Database (BDB) — replaces BE/CONN "planning-only"
+
+**Scope change (client-authorised 2026-09-23):** V1 ships a real backend +
+database, not just an adapter seam. This reverses the PRD's earlier
+"frontend-only, no server, no database, localStorage-only" baseline
+(ARC-01, ARC-03, ARC-04-as-was, OOS-04, OOS-19, ACC-08/09-as-was, SEC-04/05/
+07-as-was) and makes storage a client->server system-of-record.
+
+**Rule:** every BDB task MUST keep its PRD in sync in the same change (write
+or update the PRD requirement rows for the IDs the task touches, then update
+CH/DEC/ID tables and the version/date), and MUST NOT ship a behavior change
+without its PRD rows already updated. Docs tasks update docs; code tasks
+update code + PRD together.
+
+**Client-decision dependencies (not fabricated, still required):**
+- **BDB-CD-01** — the real Google "Internal" client ID (ACC-09/OI-05). Until
+  provided, the server auth tests run in simulated mode; the live path is
+  implemented but gated.
+- **BDB-CD-02** — hosting URL/domain (ARC-02/OI-11) for deploy wiring.
+- **BDB-CD-03** — display currency list and default (SET-05/OI-09).
+- **BDB-CD-04** — backup cadence days (BAK-08/OI-08).
+
+---
+
+## BDB-01 — Rewrite the PRD architecture/data/security rows for client->server V1
+
+- **PRD:** ARC-01/02/03/04-as-was, OOS-04/19, ACC-08/09, SEC-04/05/07, plus
+  CH/DEC/ID/version/date tables.
+- **Goal:** The PRD states the new V1: a backend + database are in scope, data
+  moves to the server under Google sign-in, and the old rows are rewritten,
+  re-tagged, or moved to "Superseded" — with the change log and decision log
+  updated so nothing is silently reversed.
+- **Context:** The current PRD says "MUST NOT include a server, database, or
+  API" (ARC-01) and "data never leaves the device" (SEC-04). Both are now
+  reversed by client decision. This is the docs-first task that makes every
+  later BDB task traceable.
+- **Files to touch:** `Personal_Expense_Tracker_PRD.md` only.
+- **Implement:**
+  1. Rewrite ARC-01/02/03: server + database in scope; app served over HTTPS;
+     data stored server-side per account with user-key separation.
+  2. Rewrite ACC-08/09: sign-in becomes real Google sign-in (server-verified
+     ID token, company domain enforced server-side).
+  3. Rewrite SEC-04/05/07: data IS transmitted to the company's own server;
+     privacy statement updated; analytics remain out of scope.
+  4. Move the old localStorage-only rows to a "Superseded in V1 (see BDB)"
+     note instead of deleting; keep traceability.
+  5. Update OOS-04/19, Open items OI-05/08/09/11 status, and the version/date.
+- **DoD:** Grep shows no surviving "MUST NOT include a server/database" claim
+  that contradicts the new scope; every reversal has a CH/DEC row; lint/build
+  unaffected (docs only).
+- **Verify:** `grep -ni "must not include a server\|never leaves the device"`
+  shows only superseded/reference text with the new scope in the same section;
+  `npm run lint`; `npm run build`.
+
+---
+
+## BDB-02 — Database schema design doc (mirror the existing model 1:1)
+
+- **PRD:** DAT-01/02/03/04, CAT, SET (fields as in §7), ARC-06 (schema
+  version), DAT-08 (unreadable data never erased).
+- **Goal:** `docs/database-schema.md` specifying tables that map 1:1 from the
+  current transaction/category/settings JSON so the UI needs zero change.
+- **Context:** The data model already carries `id` + `createdAt` + `updatedAt`
+  (DAT-01) and integer-hundredths amounts (DAT-02); the merge rules live in
+  `restore-merge.js`. The schema must preserve those so BAK/CONN merge parity
+  holds server-side. Amounts stay integer hundredths (no float).
+- **Files to touch:** `docs/database-schema.md` (new, docs only) +
+  `Personal_Expense_Tracker_PRD.md` (add ARC-14 "database schema is
+  documented in docs/database-schema.md").
+- **Implement:**
+  1. Tables: `users`, `transactions`, `categories` (type, isPredefined,
+     custom deletion→Other per CAT-06), `settings` (currency, cadence,
+     lastBackup), `schema_migrations`.
+  2. Every column tied to a PRD DAT/CAT/SET row and to the existing field
+     name in `src/lib/storage.js`; amounts integer hundredths.
+  3. Note the merge rule (id, `updatedAt` wins, categories by lower-cased
+     name) as the server-side conflict policy (mirrors BAK-03/05).
+- **DoD:** Every field in the current bundle's transaction/category/settings
+  shapes appears exactly once; no invented columns; schema doc reviewed.
+- **Verify:** Cross-check each key in `src/lib/storage.js` against a schema
+  column; `npm run lint`; `npm run build`.
+
+---
+
+## BDB-03 — API contract doc: endpoints mirror the storage seam
+
+- **PRD:** ACC-09 (auth), TXN/LST/CAT/SET/BAK (operations), ARC-04
+  (storage seam as the swap point).
+- **Goal:** `docs/api-contract.md` defining REST endpoints that correspond 1:1
+  to the current `storage.js` operations, so the UI's store adapter can swap
+  without UI changes.
+- **Context:** `src/lib/storage.js` already centralises every read/write
+  (`loadUserData`, `saveTransactions`, `saveCategories`, `saveSettings`,
+  backup/restore). The API contract maps each to a route and payload shape,
+  reusing the exact field names.
+- **Files to touch:** `docs/api-contract.md` (new, docs only) + PRD (ARC-15
+  "API contract documented").
+- **Implement:**
+  1. Endpoints: auth (Google ID-token exchange), GET/PUT transactions,
+     categories, settings; POST backup/export; POST backup/restore (merge).
+  2. JSON payloads use the current field names and integer-hundredths amounts;
+     merge/restore follows BAK-03/05 rules server-side.
+  3. Security section: token verified server-side; @company domain enforced;
+     HTTPS only; no analytics.
+- **DoD:** Every `storage.js` function maps to ≥1 endpoint; payload shapes
+  identical to current JSON; reviewer confirms no UI change implied.
+- **Verify:** Grep each `storage.js` function name against `api-contract.md`;
+  `npm run lint`; `npm run build`.
+
+---
+
+## BDB-04 — Server auth service: verify Google ID token + company domain (gate, flag-gated in tests)
+
+- **PRD:** ACC-02/03/08/09 (company sign-in), SEC-04 (server-verified).
+- **Goal:** A server endpoint that accepts a Google ID-token credential,
+  verifies it (audience + issuer + expiry), extracts the email, and enforces
+  the `@northwind.co` domain server-side — the real enforcement the UI gate
+  once faked.
+- **Context:** Reuses the simulated-mode domain rule already in the app
+  (`COMPANY_DOMAIN`, SignIn gate) but now enforced server-side behind a flag.
+  Live Google validation needs the real client ID (BDB-CD-01); until then a
+  test-only injectable verifier keeps all tests green in simulated mode.
+- **Files to touch:** `server/` (new auth module), `.env.example` (document
+  `VITE_GOOGLE_CLIENT_ID` + server-side equivalent), PRD ACC rows.
+- **Implement:**
+  1. Auth route verifying the token (client ID, issuer, expiry, `hd` claim).
+  2. Domain gate: only `@northwind.co` accounts admitted; wrong domain →
+     403 matching the current UI message.
+  3. Injectable verifier: default = simulated (V1/test), real = Google library
+     when client ID present; tests run in simulated mode.
+- **DoD:** Server rejects wrong-domain and invalid tokens; simulated mode is
+  default; tests green; PRD ACC-08/09 updated to "server-enforced".
+- **Verify:** `npm test` (auth suite incl. wrong-domain/expired); lint;
+  build; grep confirms domain gate on server, not just UI.
+
+---
+
+## BDB-05 — Server CRUD: transactions, categories, settings (mirror storage.js)
+
+- **PRD:** TXN-01..23, LST, CAT-01..10, SET-01..05, BR-01..11, DAT.
+- **Goal:** REST CRUD for transactions, categories, and per-user settings that
+  returns/accepts the exact shapes the UI already uses, so the adapter is a
+  straight swap.
+- **Context:** The UI stores transactions (id, type, amount-hundredths,
+  categoryId, date, note, createdAt, updatedAt), categories, settings. The
+  server stores the same, keyed by account, with server-side validation.
+- **Files to touch:** `server/` (routes + validators), `docs/api-contract.md`
+  (keep in sync), PRD TXN/CAT/SET rows (note server-side validation).
+- **Implement:**
+  1. Transactions: create/read/update/delete + list (search/filter/sort per
+     LST-10..16) with the same validation the form enforces (TXN-03/04).
+  2. Categories: CRUD with CAT-04..07 rules (unique name, custom deletion →
+     "Other").
+  3. Settings: read/update, currency label-only (SET-02/03).
+  4. All write ops re-validate server-side; no amount over
+     999,999,999.99 (TXN-03).
+- **DoD:** Adapter tests perform each CRUD op against the server and get the
+  same totals as localStorage; PRD updated if any server-side rule differs.
+- **Verify:** `npm test` (CRUD suite); lint; build; contract doc matches.
+
+---
+
+## BDB-06 — Server backup/restore: two-phase with merge (BAK parity)
+
+- **PRD:** BAK-01..10, SEC-09 (plaintext warning), ARC-06.
+- **Goal:** Export returns a JSON backup (same format as today, BAK-01) and
+  restore runs the exact two-phase preview→apply merge as the client (BAK-02
+  to BAK-05), now server-side, within an atomic transaction.
+- **Context:** The client merge rules already exist in `restore-merge.js`
+  (id + `updatedAt` wins; categories by lower-cased name). Reuse the same
+  pure module on the server (or port it) so backup/restore parity is exact.
+- **Files to touch:** `server/` (backup routes), `restore-merge.js` (reuse/
+  port), PRD BAK rows (server-side).
+- **Implement:**
+  1. `POST /backup/export` → same JSON format + version (BAK-01, SEC-09
+     warning retained).
+  2. `POST /backup/restore` → two-phase: preview counts (added/skipped),
+     apply atomically on confirm; unreadable backup → clear error, nothing
+     changes (ARC-06/DAT-08).
+  3. Merge via the shared rules so a restore then local merge agree.
+- **DoD:** Export/restore round-trip identical to the client backup file;
+  atomic apply (no partial restore); tests pass; PRD BAK updated.
+- **Verify:** `npm test` (backup suite); lint; build; compare restore results
+  between server and `restore-merge.js` on the same fixture.
+
+---
+
+## BDB-07 — Backend flag + storage adapter (localStorage ↔ API, flag-gated)
+
+- **PRD:** ARC-04 (seam), DLV-02/06, OOS-04-as-was.
+- **Goal:** `src/lib/storage-adapter.js` behind a `VITE_BACKEND_URL` flag
+  (or equivalent): when set, reads/writes route to the API; when unset, the
+  app is byte-identical to today's localStorage path. Zero UI change.
+- **Context:** All I/O flows through `storage.js`; `store.jsx` is the only
+  consumer. The adapter implements the same `loadUserData/save*` surface
+  against the API, so `store.jsx` doesn't change.
+- **Files to touch:** `src/lib/storage-adapter.js` (new), `.env.example`
+  (`VITE_BACKEND_URL`), README Backend section, PRD ARC-04 update.
+- **Implement:**
+  1. Adapter selecting localStorage (default) vs API (flag) with identical
+     surface.
+  2. On flag on: auth via token from the sign-in session, then CRUD via
+     contract endpoints.
+  3. Never degrade silently: if the server is unreachable, surface the
+     storage-unavailable message (FBK-03), never drop local data.
+- **DoD:** Flag off → behavior unchanged (all 37 tests + QA pass); flag on +
+  stub server → CRUD round-trip passes; PRD updated.
+- **Verify:** `npm test` (adapter suite with mock fetch); lint; build.
+
+---
+
+## BDB-08 — Sync merge on load & multi-tab (server + local by updatedAt)
+
+- **PRD:** BAK-03/05 (merge), ARC-08 (multi-tab), DAT-08 (no loss), BR-05.
+- **Goal:** On load with the flag on, the adapter merges server and local
+  records using the shared restore-merge rules (id-match, `updatedAt` wins)
+  so nothing is lost and the same data shows in every tab.
+- **Context:** Reuses `restore-merge.js` for the load-time reconciliation;
+  multi-tab already syncs via the storage event (ARC-08) — extend to trigger
+  a refetch when the flag is on.
+- **Files to touch:** `src/lib/storage-adapter.js`, `src/lib/store.jsx`
+  (load path behind flag), PRD ARC-08 (server-aware multi-tab).
+- **Implement:**
+  1. Load = fetch server set → merge against local → persist merged result
+     both sides (same rule as BAK-03/05).
+  2. `storage`-event listener re-fetches when the flag is on (multi-tab).
+- **DoD:** Merged result matches `restore-merge.js` on fixtures; identical
+  data in two tabs; no data loss on partial availability; tests pass.
+- **Verify:** `npm test` (merge-sync suite); lint; build; manual two-tab
+  check with stub server.
+
+---
+
+## BDB-09 — Security hardening: secrets, HTTPS, no analytics, backup warning
+
+- **PRD:** SEC-01..10, ACC, SUP-02 (security updates), DLV-06.
+- **Goal:** Server and client enforce: no secrets in repo, HTTPS only,
+  no analytics/tracking (SEC-05), backup still carries the unencrypted
+  plaintext warning (SEC-09), and only display-name/email/account-id used.
+- **Context:** Moving to a server changes SEC-04/07/10 wording; the
+  implementation must keep the no-analytics (SEC-05) and plaintext-backup
+  warning (SEC-09) guarantees and document at-rest/at-transit security.
+- **Files to touch:** `server/` (env loading, TLS notes), `README.md`,
+  `docs/security-notes.md`, PRD SEC rows.
+- **Implement:**
+  1. `.env` for secrets only (never committed); server runs behind HTTPS.
+  2. Grep-verify no analytics/tracking code in client or server.
+  3. Backup file: keep SEC-09 plaintext warning + note on server.
+  4. Only email/name/account-id stored/used (SEC-03/ACC-07).
+- **DoD:** Grep shows no secrets in repo, no tracking; HTTPS documented;
+  PRD SEC-04/07/10 updated; tests pass.
+- **Verify:** `grep -rn "secret\|api[_-]\?key" --include=*.js -i` in commits
+  → none (except `.env.example` placeholders); lint; build; `npm test`.
+
+---
+
+## BDB-10 — Wire deploy + README + final QA of the full client↔server app
+
+- **PRD:** DLV-01/02/05, SUP, DLV-06, UXD, BAK.
+- **Goal:** The whole V1 (client + server + database) builds, deploys behind
+  HTTPS, and passes the acceptance criteria (AC-01..AC-18) end to end, with
+  the PRD reflecting the shipped state and the README covering run/deploy.
+- **Context:** After BDB-01..09, this is the integration + sign-off task:
+  wire hosting (BDB-CD-02), run the full browser QA against the deployed app,
+  update README (stack, run, deploy, storage), and confirm PRD matches the
+  shipped build.
+- **Files to touch:** README.md, deployment config (host-specific), PRD DLV
+  rows + version.
+- **Implement:**
+  1. Ship a unified build (client + server + DB) to the host over HTTPS.
+  2. Re-run the browser QA suite against the deployed URL; record evidence.
+  3. Update README: stack, local run, backup/restore, deploy, storage note.
+  4. Confirm every AC-01..AC-18 passes on the deployed build.
+- **DoD:** Deployed HTTPS URL works, QA green, README accurate, PRD matches;
+  signed off via DLV-06 with the named approver.
+- **Verify:** QA report on the deployed URL; `npm run lint`; `npm run build`;
+  `npm run typecheck`; client review/sign-off.
+
+---
+
+# Suggested order — BDB
+
+1. **BDB-01** (docs-first PRD rewrite — everything traces from here).
+2. **BDB-02 → BDB-03** (schema + API contract docs; verify field parity).
+3. **BDB-04 → BDB-05 → BDB-06** (auth → CRUD → backup/restore; build
+   server-side core; add tests per suite).
+4. **BDB-07** (storage adapter behind `VITE_BACKEND_URL`; no UI change).
+5. **BDB-08** (sync merge on load + multi-tab; reuse restore-merge).
+6. **BDB-09** (security pass; grep-verified).
+7. **BDB-10** (deploy + full QA + README + PRD final sync; requires
+   BDB-CD-02 hosting decision to go live).
